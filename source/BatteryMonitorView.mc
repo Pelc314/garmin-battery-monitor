@@ -1,0 +1,385 @@
+import Toybox.Application.Storage;
+import Toybox.Attention;
+import Toybox.Graphics;
+import Toybox.Lang;
+import Toybox.Math;
+import Toybox.System;
+import Toybox.Time;
+import Toybox.WatchUi;
+
+class BatteryMonitorView extends WatchUi.View {
+
+    private var _page as Number = 0;             // 0 = Stats Page, 1 = Graph Page
+    private var _graphDuration as Number = 0;    // 0 = 24h, 1 = 7d, 2 = 30d
+    private var _showResetConfirm as Boolean = false;
+
+    function initialize() {
+        View.initialize();
+    }
+
+    function onLayout(dc as Dc) as Void {
+        // Drawing is done dynamically in onUpdate() to adjust coordinates 
+        // to the Instinct 2 sub-window.
+    }
+
+    // Main draw loop
+    function onUpdate(dc as Dc) as Void {
+        // Set up background
+        dc.setColor(Graphics.COLOR_WHITE, Graphics.COLOR_BLACK);
+        dc.clear();
+
+        // 1. Fetch current status
+        var stats = System.getSystemStats();
+        var battery = stats.battery;
+        var isCharging = stats.charging;
+        var solar = 0;
+        if (stats has :solarIntensity && stats.solarIntensity != null) {
+            solar = stats.solarIntensity;
+        }
+
+        // 2. Fetch history and run analytics
+        var timestamps = Storage.getValue("timestamps") as Array<Number>?;
+        var batteryLevels = Storage.getValue("batteryLevels") as Array<Number>?;
+        var chargingStates = Storage.getValue("chargingStates") as Array<Number>?;
+        var solarIntensities = Storage.getValue("solarIntensities") as Array<Number>?;
+        
+        var size = (timestamps != null) ? timestamps.size() : 0;
+        
+        var avgDrainRate = 0.0;
+        var estDays = 0.0;
+        var acGainedToday = 0.0;
+        var solarGainedToday = 0.0;
+        var solarIntensityAvgToday = 0.0;
+        var solarHoursToday = 0.0;
+        
+        if (size >= 2 && timestamps != null && batteryLevels != null && chargingStates != null && solarIntensities != null) {
+            var totalHours = 0.0;
+            var totalDrop = 0.0;
+            var now = Time.now().value();
+            
+            var solarCountToday = 0;
+            var solarSumToday = 0;
+            
+            for (var i = 1; i < size; i++) {
+                var dt = (timestamps[i] - timestamps[i-1]) / 3600.0; // Hours
+                var batDiff = (batteryLevels[i-1] - batteryLevels[i]) / 10.0; // % drop
+                
+                // Average drain rate during non-charging periods
+                if (chargingStates[i] == 0 && chargingStates[i-1] == 0 && dt > 0.0 && dt < 48.0) {
+                    if (batDiff >= 0.0) {
+                        totalDrop += batDiff;
+                        totalHours += dt;
+                    }
+                }
+                
+                // Daily accumulator (last 24 hours)
+                if (now - timestamps[i] <= 86400) {
+                    var gain = -batDiff; // Positive if battery increased
+                    if (gain > 0.0) {
+                        if (chargingStates[i] == 1 || chargingStates[i-1] == 1) {
+                            acGainedToday += gain;
+                        } else if (solarIntensities[i] > 0) {
+                            solarGainedToday += gain;
+                        }
+                    }
+                    
+                    if (solarIntensities[i] > 0) {
+                        solarCountToday++;
+                        solarSumToday += solarIntensities[i];
+                        solarHoursToday += dt;
+                    }
+                }
+            }
+            
+            if (totalHours > 0.0) {
+                avgDrainRate = totalDrop / totalHours; // % per hour
+            }
+            
+            if (avgDrainRate > 0.001) {
+                var estHours = battery / avgDrainRate;
+                estDays = estHours / 24.0;
+                Storage.setValue("est_days", estDays);
+            } else {
+                Storage.setValue("est_days", null);
+            }
+            
+            if (solarCountToday > 0) {
+                solarIntensityAvgToday = solarSumToday.toFloat() / solarCountToday.toFloat();
+            }
+        }
+
+        // 3. Draw Instinct 2 Sub-Window Widget (Dynamic placement via getSubscreen)
+        var subscreen = null;
+        if (WatchUi has :getSubscreen) {
+            subscreen = WatchUi.getSubscreen();
+        }
+        
+        if (subscreen != null) {
+            var scx = subscreen.x + subscreen.width / 2;
+            var scy = subscreen.y + subscreen.height / 2;
+            var scr = subscreen.width / 2;
+            
+            // Draw border
+            dc.setPenWidth(1);
+            dc.setColor(Graphics.COLOR_WHITE, Graphics.COLOR_BLACK);
+            dc.drawCircle(scx, scy, scr);
+            
+            // Draw battery arc gauge inside the circle (r-3)
+            if (battery > 0) {
+                dc.setPenWidth(3);
+                var sweep = (battery * 3.6).toNumber();
+                var startAngle = 90;
+                var endAngle = 90 - sweep;
+                dc.drawArc(scx, scy, scr - 3, Graphics.ARC_CLOCKWISE, startAngle, endAngle);
+            }
+            
+            // Draw status inside
+            dc.setPenWidth(1);
+            if (isCharging) {
+                // Lightning Bolt icon
+                dc.drawLine(scx - 3, scy - 7, scx + 1, scy - 2);
+                dc.drawLine(scx + 1, scy - 2, scx - 2, scy - 2);
+                dc.drawLine(scx - 2, scy - 2, scx + 3, scy + 7);
+            } else if (solar > 10) {
+                // Sun icon
+                dc.drawCircle(scx, scy, 3);
+                for (var angle = 0.0; angle < 2.0 * Math.PI; angle += Math.PI / 4.0) {
+                    var x1 = scx + (5.0 * Math.cos(angle)).toNumber();
+                    var y1 = scy + (5.0 * Math.sin(angle)).toNumber();
+                    var x2 = scx + (8.0 * Math.cos(angle)).toNumber();
+                    var y2 = scy + (8.0 * Math.sin(angle)).toNumber();
+                    dc.drawLine(x1, y1, x2, y2);
+                }
+            } else {
+                // Show raw percentage text centered
+                var battStr = battery.format("%.0f");
+                dc.drawText(
+                    scx, 
+                    scy, 
+                    Graphics.FONT_XTINY, 
+                    battStr, 
+                    Graphics.TEXT_JUSTIFY_CENTER | Graphics.TEXT_JUSTIFY_VCENTER
+                );
+            }
+        }
+
+        // Return thickness to normal
+        dc.setPenWidth(1);
+
+        // 4. Render main screens
+        if (_showResetConfirm) {
+            drawResetConfirm(dc);
+        } else if (_page == 0) {
+            drawStatsPage(dc, battery, estDays, avgDrainRate, acGainedToday, solarGainedToday, solarHoursToday, solarIntensityAvgToday);
+        } else {
+            drawGraphPage(dc, timestamps, batteryLevels, chargingStates, size);
+        }
+    }
+
+    // Page 1: Statistics
+    private function drawStatsPage(dc as Dc, battery as Float, estDays as Float, avgDrainRate as Float, acGainedToday as Float, solarGainedToday as Float, solarHoursToday as Float, solarIntensityAvgToday as Float) as Void {
+        // Title on the left of subscreen
+        dc.drawText(10, 15, Graphics.FONT_SMALL, "BATTERY", Graphics.TEXT_JUSTIFY_LEFT | Graphics.TEXT_JUSTIFY_VCENTER);
+        
+        // Large Percent
+        dc.drawText(10, 36, Graphics.FONT_MEDIUM, battery.format("%.1f") + "%", Graphics.TEXT_JUSTIFY_LEFT | Graphics.TEXT_JUSTIFY_VCENTER);
+        
+        // Custom Estimate
+        var estStr = "Need 24h data";
+        if (estDays > 0.0) {
+            var days = estDays.toNumber();
+            var hours = ((estDays - days) * 24.0).toNumber();
+            estStr = days.toString() + "d " + hours.toString() + "h left";
+        }
+        dc.drawText(10, 56, Graphics.FONT_XTINY, estStr, Graphics.TEXT_JUSTIFY_LEFT | Graphics.TEXT_JUSTIFY_VCENTER);
+
+        // Drain Rate
+        var drainStr = "Drain: --";
+        if (avgDrainRate > 0.0) {
+            drainStr = "Drain: -" + avgDrainRate.format("%.2f") + "%/h";
+        }
+        dc.drawText(10, 72, Graphics.FONT_XTINY, drainStr, Graphics.TEXT_JUSTIFY_LEFT | Graphics.TEXT_JUSTIFY_VCENTER);
+
+        // Horizontal line dividing stats and daily charging
+        dc.drawLine(5, 86, 171, 86);
+
+        // Today's Charging Header
+        dc.drawText(88, 96, Graphics.FONT_XTINY, "TODAY'S CHARGE", Graphics.TEXT_JUSTIFY_CENTER | Graphics.TEXT_JUSTIFY_VCENTER);
+
+        // Charger details side-by-side
+        dc.drawText(15, 114, Graphics.FONT_XTINY, "AC: +" + acGainedToday.format("%.1f") + "%", Graphics.TEXT_JUSTIFY_LEFT | Graphics.TEXT_JUSTIFY_VCENTER);
+        dc.drawText(95, 114, Graphics.FONT_XTINY, "Sun: +" + solarGainedToday.format("%.1f") + "%", Graphics.TEXT_JUSTIFY_LEFT | Graphics.TEXT_JUSTIFY_VCENTER);
+
+        // Solar exposure details
+        var solarExpStr = "Solar: " + solarHoursToday.format("%.1f") + "h @ avg " + solarIntensityAvgToday.format("%.0f") + "%";
+        dc.drawText(88, 134, Graphics.FONT_XTINY, solarExpStr, Graphics.TEXT_JUSTIFY_CENTER | Graphics.TEXT_JUSTIFY_VCENTER);
+
+        // Navigation Footer hint
+        dc.drawText(88, 158, Graphics.FONT_XTINY, "GPS: Log | UP/DN: Page", Graphics.TEXT_JUSTIFY_CENTER | Graphics.TEXT_JUSTIFY_VCENTER);
+    }
+
+    // Page 2: History Graph
+    private function drawGraphPage(dc as Dc, timestamps as Array<Number>?, batteryLevels as Array<Number>?, chargingStates as Array<Number>?, size as Number) as Void {
+        var pointsToDraw = 24;
+        var durationLabel = "24h";
+        
+        if (_graphDuration == 1) {
+            pointsToDraw = 168; // 7 days
+            durationLabel = "7d";
+        } else if (_graphDuration == 2) {
+            pointsToDraw = 720; // 30 days
+            durationLabel = "30d";
+        }
+
+        var startIdx = size - pointsToDraw;
+        if (startIdx < 0) {
+            startIdx = 0;
+        }
+        var numPoints = size - startIdx;
+
+        // Title (keeps left of subscreen)
+        dc.drawText(10, 20, Graphics.FONT_SMALL, "HISTORY: " + durationLabel, Graphics.TEXT_JUSTIFY_LEFT | Graphics.TEXT_JUSTIFY_VCENTER);
+
+        // Graph Bounds
+        var gx = 25;
+        var gy = 56;
+        var gw = 125;
+        var gh = 75;
+
+        // Draw bounding box
+        dc.drawLine(gx, gy + gh, gx + gw, gy + gh); // X axis
+        dc.drawLine(gx, gy, gx, gy + gh);           // Y axis
+
+        // Draw Y labels
+        dc.drawText(gx - 3, gy, Graphics.FONT_XTINY, "100", Graphics.TEXT_JUSTIFY_RIGHT | Graphics.TEXT_JUSTIFY_VCENTER);
+        dc.drawText(gx - 3, gy + gh, Graphics.FONT_XTINY, "0", Graphics.TEXT_JUSTIFY_RIGHT | Graphics.TEXT_JUSTIFY_VCENTER);
+        dc.drawText(gx - 3, gy + gh / 2, Graphics.FONT_XTINY, "50", Graphics.TEXT_JUSTIFY_RIGHT | Graphics.TEXT_JUSTIFY_VCENTER);
+
+        if (numPoints < 2 || batteryLevels == null || chargingStates == null) {
+            // No data message
+            dc.drawText(gx + gw / 2, gy + gh / 2, Graphics.FONT_XTINY, "Collecting data...", Graphics.TEXT_JUSTIFY_CENTER | Graphics.TEXT_JUSTIFY_VCENTER);
+        } else {
+            // Plot battery points
+            var prevX = 0;
+            var prevY = 0;
+            
+            for (var i = 0; i < numPoints; i++) {
+                var idx = startIdx + i;
+                var valY = batteryLevels[idx] / 10.0; // Float %
+                
+                var x = gx + (i.toFloat() / (numPoints - 1).toFloat() * gw).toNumber();
+                var y = gy + gh - (valY / 100.0 * gh).toNumber();
+
+                if (i > 0) {
+                    // Highlight charging intervals with double lines
+                    if (chargingStates[idx] == 1) {
+                        dc.drawLine(prevX, prevY, x, y);
+                        dc.drawLine(prevX, prevY + 1, x, y + 1);
+                    } else {
+                        dc.drawLine(prevX, prevY, x, y);
+                    }
+                }
+                prevX = x;
+                prevY = y;
+            }
+        }
+
+        // Navigation Footer hint
+        dc.drawText(88, 158, Graphics.FONT_XTINY, "GPS: Zoom | UP/DN: Page", Graphics.TEXT_JUSTIFY_CENTER | Graphics.TEXT_JUSTIFY_VCENTER);
+    }
+
+    // Page 3: Reset Confirmation
+    private function drawResetConfirm(dc as Dc) as Void {
+        dc.drawText(88, 40, Graphics.FONT_SMALL, "RESET LOGS?", Graphics.TEXT_JUSTIFY_CENTER | Graphics.TEXT_JUSTIFY_VCENTER);
+        dc.drawText(88, 75, Graphics.FONT_XTINY, "This wipes all history.", Graphics.TEXT_JUSTIFY_CENTER | Graphics.TEXT_JUSTIFY_VCENTER);
+        dc.drawText(88, 115, Graphics.FONT_XTINY, "GPS: Confirm Reset", Graphics.TEXT_JUSTIFY_CENTER | Graphics.TEXT_JUSTIFY_VCENTER);
+        dc.drawText(88, 135, Graphics.FONT_XTINY, "BACK: Cancel Reset", Graphics.TEXT_JUSTIFY_CENTER | Graphics.TEXT_JUSTIFY_VCENTER);
+    }
+
+    // Navigation methods
+    function nextPage() as Void {
+        if (_showResetConfirm) { return; }
+        _page = (_page + 1) % 2;
+    }
+
+    function previousPage() as Void {
+        if (_showResetConfirm) { return; }
+        _page = (_page + 1) % 2; // only 2 pages, so same thing
+    }
+
+    function toggleResetConfirmation() as Void {
+        _showResetConfirm = !_showResetConfirm;
+    }
+
+    // Handles selection key (GPS)
+    function onSelectKey() as Void {
+        if (_showResetConfirm) {
+            // Confirm reset
+            Storage.deleteValue("timestamps");
+            Storage.deleteValue("batteryLevels");
+            Storage.deleteValue("chargingStates");
+            Storage.deleteValue("solarIntensities");
+            Storage.deleteValue("est_days");
+            _showResetConfirm = false;
+            
+            if (Attention has :playTone) {
+                Attention.playTone(Attention.TONE_RESET);
+            }
+        } else if (_page == 1) {
+            // Cycle duration: 24h (0) -> 7d (1) -> 30d (2)
+            _graphDuration = (_graphDuration + 1) % 3;
+        } else {
+            // Trigger manual logging point for developer convenience / initial seeding
+            triggerManualLog();
+            if (Attention has :playTone) {
+                Attention.playTone(Attention.TONE_KEY);
+            }
+        }
+    }
+
+    // Manual data logger invocation
+    function triggerManualLog() as Void {
+        var now = Time.now().value();
+        var stats = System.getSystemStats();
+        var battery = stats.battery;
+        var isCharging = stats.charging ? 1 : 0;
+        
+        var solar = 0;
+        if (stats has :solarIntensity && stats.solarIntensity != null) {
+            solar = stats.solarIntensity;
+        }
+
+        var timestamps = Storage.getValue("timestamps") as Array<Number>?;
+        var batteryLevels = Storage.getValue("batteryLevels") as Array<Number>?;
+        var chargingStates = Storage.getValue("chargingStates") as Array<Number>?;
+        var solarIntensities = Storage.getValue("solarIntensities") as Array<Number>?;
+
+        if (timestamps == null) { timestamps = [] as Array<Number>; }
+        if (batteryLevels == null) { batteryLevels = [] as Array<Number>; }
+        if (chargingStates == null) { chargingStates = [] as Array<Number>; }
+        if (solarIntensities == null) { solarIntensities = [] as Array<Number>; }
+
+        // Limit double presses within 3 seconds
+        if (timestamps.size() > 0 && now - timestamps[timestamps.size() - 1] < 3) {
+            return;
+        }
+
+        timestamps.add(now);
+        batteryLevels.add((battery * 10.0).toNumber());
+        chargingStates.add(isCharging);
+        solarIntensities.add(solar);
+
+        // Roll over limits
+        if (timestamps.size() > 720) {
+            timestamps = timestamps.slice(1, null);
+            batteryLevels = batteryLevels.slice(1, null);
+            chargingStates = chargingStates.slice(1, null);
+            solarIntensities = solarIntensities.slice(1, null);
+        }
+
+        Storage.setValue("timestamps", timestamps);
+        Storage.setValue("batteryLevels", batteryLevels);
+        Storage.setValue("chargingStates", chargingStates);
+        Storage.setValue("solarIntensities", solarIntensities);
+    }
+}
