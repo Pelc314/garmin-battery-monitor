@@ -169,20 +169,43 @@ class BatteryMonitorView extends WatchUi.View {
         // 4. Render main screens
         if (_showResetConfirm) {
             drawResetConfirm(dc);
-        } else if (_page == 0) {
-            drawStatsPage(dc, battery, estDays, avgDrainRate, acGainedToday, solarGainedToday, solarHoursToday, solarIntensityAvgToday);
         } else {
-            drawGraphPage(dc, timestamps, batteryLevels, chargingStates, size);
+            if (_page == 0) {
+                drawStatsPage(dc, battery, estDays, avgDrainRate, acGainedToday, solarGainedToday, solarHoursToday, solarIntensityAvgToday);
+            } else {
+                drawGraphPage(dc, timestamps, batteryLevels, chargingStates, size);
+            }
+            drawPageIndicator(dc);
+        }
+    }
+
+    // Draws two small vertical dots on the left edge to indicate the active screen
+    private function drawPageIndicator(dc as Dc) as Void {
+        var px = 6;
+        var py1 = 82;
+        var py2 = 94;
+        
+        dc.setColor(Graphics.COLOR_WHITE, Graphics.COLOR_BLACK);
+        if (_page == 0) {
+            dc.fillCircle(px, py1, 2);
+            dc.drawCircle(px, py2, 2);
+        } else {
+            dc.drawCircle(px, py1, 2);
+            dc.fillCircle(px, py2, 2);
         }
     }
 
     // Page 1: Statistics
     private function drawStatsPage(dc as Dc, battery as Float, estDays as Float, avgDrainRate as Float, acGainedToday as Float, solarGainedToday as Float, solarHoursToday as Float, solarIntensityAvgToday as Float) as Void {
-        // Title on the left of subscreen
-        dc.drawText(10, 15, Graphics.FONT_SMALL, "BATTERY", Graphics.TEXT_JUSTIFY_LEFT | Graphics.TEXT_JUSTIFY_VCENTER);
+        // We center the battery statistics on the left half of the screen (x = 60)
+        // to stay clear of both the top-left corner curve and the top-right sub-window.
+        var leftCenter = 60;
+        
+        // Title
+        dc.drawText(leftCenter, 20, Graphics.FONT_XTINY, "BATTERY", Graphics.TEXT_JUSTIFY_CENTER | Graphics.TEXT_JUSTIFY_VCENTER);
         
         // Large Percent
-        dc.drawText(10, 36, Graphics.FONT_MEDIUM, battery.format("%.1f") + "%", Graphics.TEXT_JUSTIFY_LEFT | Graphics.TEXT_JUSTIFY_VCENTER);
+        dc.drawText(leftCenter, 42, Graphics.FONT_MEDIUM, battery.format("%.1f") + "%", Graphics.TEXT_JUSTIFY_CENTER | Graphics.TEXT_JUSTIFY_VCENTER);
         
         // Custom Estimate
         var estStr = "Need 24h data";
@@ -191,31 +214,30 @@ class BatteryMonitorView extends WatchUi.View {
             var hours = ((estDays - days) * 24.0).toNumber();
             estStr = days.toString() + "d " + hours.toString() + "h left";
         }
-        dc.drawText(10, 56, Graphics.FONT_XTINY, estStr, Graphics.TEXT_JUSTIFY_LEFT | Graphics.TEXT_JUSTIFY_VCENTER);
+        dc.drawText(leftCenter, 64, Graphics.FONT_XTINY, estStr, Graphics.TEXT_JUSTIFY_CENTER | Graphics.TEXT_JUSTIFY_VCENTER);
 
         // Drain Rate
         var drainStr = "Drain: --";
         if (avgDrainRate > 0.0) {
             drainStr = "Drain: -" + avgDrainRate.format("%.2f") + "%/h";
         }
-        dc.drawText(10, 72, Graphics.FONT_XTINY, drainStr, Graphics.TEXT_JUSTIFY_LEFT | Graphics.TEXT_JUSTIFY_VCENTER);
+        dc.drawText(leftCenter, 78, Graphics.FONT_XTINY, drainStr, Graphics.TEXT_JUSTIFY_CENTER | Graphics.TEXT_JUSTIFY_VCENTER);
 
-        // Horizontal line dividing stats and daily charging
-        dc.drawLine(5, 86, 171, 86);
+        // Horizontal line dividing stats and daily charging (below sub-window Y boundaries)
+        dc.drawLine(15, 92, 160, 92);
 
         // Today's Charging Header
-        dc.drawText(88, 96, Graphics.FONT_XTINY, "TODAY'S CHARGE", Graphics.TEXT_JUSTIFY_CENTER | Graphics.TEXT_JUSTIFY_VCENTER);
+        dc.drawText(88, 102, Graphics.FONT_XTINY, "TODAY'S CHARGE", Graphics.TEXT_JUSTIFY_CENTER | Graphics.TEXT_JUSTIFY_VCENTER);
 
-        // Charger details side-by-side
-        dc.drawText(15, 114, Graphics.FONT_XTINY, "AC: +" + acGainedToday.format("%.1f") + "%", Graphics.TEXT_JUSTIFY_LEFT | Graphics.TEXT_JUSTIFY_VCENTER);
-        dc.drawText(95, 114, Graphics.FONT_XTINY, "Sun: +" + solarGainedToday.format("%.1f") + "%", Graphics.TEXT_JUSTIFY_LEFT | Graphics.TEXT_JUSTIFY_VCENTER);
+        // Charger details side-by-side (left-aligned relative to center columns to avoid corner clip)
+        dc.drawText(25, 120, Graphics.FONT_XTINY, "AC: +" + acGainedToday.format("%.1f") + "%", Graphics.TEXT_JUSTIFY_LEFT | Graphics.TEXT_JUSTIFY_VCENTER);
+        dc.drawText(95, 120, Graphics.FONT_XTINY, "Sun: +" + solarGainedToday.format("%.1f") + "%", Graphics.TEXT_JUSTIFY_LEFT | Graphics.TEXT_JUSTIFY_VCENTER);
 
         // Solar exposure details
         var solarExpStr = "Solar: " + solarHoursToday.format("%.1f") + "h @ avg " + solarIntensityAvgToday.format("%.0f") + "%";
-        dc.drawText(88, 134, Graphics.FONT_XTINY, solarExpStr, Graphics.TEXT_JUSTIFY_CENTER | Graphics.TEXT_JUSTIFY_VCENTER);
-
-        // Navigation Footer hint
-        dc.drawText(88, 158, Graphics.FONT_XTINY, "GPS: Log | UP/DN: Page", Graphics.TEXT_JUSTIFY_CENTER | Graphics.TEXT_JUSTIFY_VCENTER);
+        dc.drawText(88, 138, Graphics.FONT_XTINY, solarExpStr, Graphics.TEXT_JUSTIFY_CENTER | Graphics.TEXT_JUSTIFY_VCENTER);
+        
+        // Footer instructions are removed to completely clear the bottom octagon boundary and avoid text cutout
     }
 
     // Page 2: History Graph
@@ -237,8 +259,8 @@ class BatteryMonitorView extends WatchUi.View {
         }
         var numPoints = size - startIdx;
 
-        // Title (keeps left of subscreen)
-        dc.drawText(10, 20, Graphics.FONT_SMALL, "HISTORY: " + durationLabel, Graphics.TEXT_JUSTIFY_LEFT | Graphics.TEXT_JUSTIFY_VCENTER);
+        // Title (centered on the left column matching Page 1 and safe from top-left clipping)
+        dc.drawText(60, 20, Graphics.FONT_XTINY, "HISTORY: " + durationLabel, Graphics.TEXT_JUSTIFY_CENTER | Graphics.TEXT_JUSTIFY_VCENTER);
 
         // Graph Bounds
         var gx = 25;
@@ -284,8 +306,7 @@ class BatteryMonitorView extends WatchUi.View {
             }
         }
 
-        // Navigation Footer hint
-        dc.drawText(88, 158, Graphics.FONT_XTINY, "GPS: Zoom | UP/DN: Page", Graphics.TEXT_JUSTIFY_CENTER | Graphics.TEXT_JUSTIFY_VCENTER);
+        // Footer instructions are removed to prevent bottom screen text cutout
     }
 
     // Page 3: Reset Confirmation
