@@ -252,21 +252,18 @@ class BatteryMonitorView extends WatchUi.View {
         var pointsToDraw = 24;
         var durationLabel = "24h";
         var windowSecs = 24 * 3600;
-        var threshold = 2;
         var thresholdMsg = "Need 2 data points";
         
         if (_graphDuration == 1) {
             pointsToDraw = 168; // 7 days
             durationLabel = "7d";
             windowSecs = 168 * 3600;
-            threshold = 6;
-            thresholdMsg = "Need 6h of logs";
+            thresholdMsg = "Need 12h of history";
         } else if (_graphDuration == 2) {
             pointsToDraw = 720; // 30 days
             durationLabel = "30d";
             windowSecs = 720 * 3600;
-            threshold = 12;
-            thresholdMsg = "Need 12h of logs";
+            thresholdMsg = "Need 7d of history";
         }
 
         // Title (centered on the left column matching Page 1 and safe from top-left clipping)
@@ -302,7 +299,26 @@ class BatteryMonitorView extends WatchUi.View {
         }
         var validPoints = size - validStartIdx;
 
-        if (validPoints < threshold || batteryLevels == null || chargingStates == null || timestamps == null) {
+        var hasEnoughData = false;
+        if (validPoints >= 2 && batteryLevels != null && chargingStates != null && timestamps != null) {
+            var durationSpanned = timestamps[size - 1] - timestamps[validStartIdx];
+            if (_graphDuration == 0) {
+                // 24h: just need at least 2 points to draw a line
+                hasEnoughData = true;
+            } else if (_graphDuration == 1) {
+                // 7d: need at least 12 hours spanned
+                if (durationSpanned >= 43200) {
+                    hasEnoughData = true;
+                }
+            } else {
+                // 30d: need at least 7 days spanned
+                if (durationSpanned >= 604800) {
+                    hasEnoughData = true;
+                }
+            }
+        }
+
+        if (!hasEnoughData) {
             // Display message that more data needs to be collected
             dc.drawText(gx + gw / 2, gy + gh / 2, Graphics.FONT_XTINY, thresholdMsg, Graphics.TEXT_JUSTIFY_CENTER | Graphics.TEXT_JUSTIFY_VCENTER);
         } else {
