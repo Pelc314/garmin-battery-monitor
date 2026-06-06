@@ -5,6 +5,7 @@ import Toybox.Lang;
 import Toybox.Math;
 import Toybox.System;
 import Toybox.Time;
+import Toybox.Time.Gregorian;
 import Toybox.WatchUi;
 
 class BatteryMonitorView extends WatchUi.View {
@@ -304,9 +305,54 @@ class BatteryMonitorView extends WatchUi.View {
                 prevX = x;
                 prevY = y;
             }
+            
+            // Draw X-axis ticks and labels
+            var startSecs = timestamps[startIdx];
+            var midSecs = timestamps[startIdx + numPoints / 2];
+            var endSecs = timestamps[size - 1];
+            
+            var labelLeft = "";
+            var labelMid = "";
+            var labelRight = "";
+            
+            if (_graphDuration == 0) {
+                // 24h: show hour of the day (e.g. 14h)
+                var infoLeft = Gregorian.info(new Time.Moment(startSecs), Time.FORMAT_SHORT);
+                var infoMid = Gregorian.info(new Time.Moment(midSecs), Time.FORMAT_SHORT);
+                var infoRight = Gregorian.info(new Time.Moment(endSecs), Time.FORMAT_SHORT);
+                
+                labelLeft = infoLeft.hour.format("%02d") + "h";
+                labelMid = infoMid.hour.format("%02d") + "h";
+                labelRight = infoRight.hour.format("%02d") + "h";
+            } else if (_graphDuration == 1) {
+                // 7d: show day names (Mon, Wed, Fri)
+                var days = ["", "Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+                var infoLeft = Gregorian.info(new Time.Moment(startSecs), Time.FORMAT_SHORT);
+                var infoMid = Gregorian.info(new Time.Moment(midSecs), Time.FORMAT_SHORT);
+                var infoRight = Gregorian.info(new Time.Moment(endSecs), Time.FORMAT_SHORT);
+                
+                labelLeft = days[infoLeft.day_of_week];
+                labelMid = days[infoMid.day_of_week];
+                labelRight = days[infoRight.day_of_week];
+            } else {
+                // 30d: show relative day marks D1, D15, D30
+                labelLeft = "D1";
+                labelMid = "D15";
+                labelRight = "D30";
+            }
+            
+            dc.setColor(Graphics.COLOR_WHITE, Graphics.COLOR_BLACK);
+            
+            // Draw tick marks (3 pixels high)
+            dc.drawLine(gx, gy + gh, gx, gy + gh + 3);
+            dc.drawLine(gx + gw / 2, gy + gh, gx + gw / 2, gy + gh + 3);
+            dc.drawLine(gx + gw, gy + gh, gx + gw, gy + gh + 3);
+            
+            // Draw labels centered below ticks (positioned at y = 140 to avoid bottom edge clip)
+            dc.drawText(gx, gy + gh + 9, Graphics.FONT_XTINY, labelLeft, Graphics.TEXT_JUSTIFY_CENTER | Graphics.TEXT_JUSTIFY_VCENTER);
+            dc.drawText(gx + gw / 2, gy + gh + 9, Graphics.FONT_XTINY, labelMid, Graphics.TEXT_JUSTIFY_CENTER | Graphics.TEXT_JUSTIFY_VCENTER);
+            dc.drawText(gx + gw, gy + gh + 9, Graphics.FONT_XTINY, labelRight, Graphics.TEXT_JUSTIFY_CENTER | Graphics.TEXT_JUSTIFY_VCENTER);
         }
-
-        // Footer instructions are removed to prevent bottom screen text cutout
     }
 
     // Page 3: Reset Confirmation
