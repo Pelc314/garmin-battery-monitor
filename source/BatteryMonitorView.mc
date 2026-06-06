@@ -180,20 +180,26 @@ class BatteryMonitorView extends WatchUi.View {
         }
     }
 
-    // Draws two small vertical dots on the left edge to indicate the active screen
+    // Draws a thin vertical scrollbar line on the far-left edge of the screen
     private function drawPageIndicator(dc as Dc) as Void {
-        var px = 6;
-        var py1 = 82;
-        var py2 = 94;
+        var x = 2;
+        var yStart = 60;
+        var yMid = 88;
+        var yEnd = 116;
         
         dc.setColor(Graphics.COLOR_WHITE, Graphics.COLOR_BLACK);
+        dc.setPenWidth(2);
+        
         if (_page == 0) {
-            dc.fillCircle(px, py1, 2);
-            dc.drawCircle(px, py2, 2);
+            // Stats page: draw top half of the scrollbar
+            dc.drawLine(x, yStart, x, yMid - 1);
         } else {
-            dc.drawCircle(px, py1, 2);
-            dc.fillCircle(px, py2, 2);
+            // Graph page: draw bottom half of the scrollbar
+            dc.drawLine(x, yMid, x, yEnd);
         }
+        
+        // Reset pen width
+        dc.setPenWidth(1);
     }
 
     // Page 1: Statistics
