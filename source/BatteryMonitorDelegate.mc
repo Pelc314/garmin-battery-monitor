@@ -45,4 +45,18 @@ class BatteryMonitorDelegate extends WatchUi.BehaviorDelegate {
         WatchUi.requestUpdate();
         return true;
     }
+
+    // Handles BACK button press
+    function onBack() as Lang.Boolean {
+        if (_view.isResetConfirmationVisible()) {
+            _view.toggleResetConfirmation();
+            WatchUi.requestUpdate();
+            return true; // Stay in the app, cancel reset
+        } else if (_view.getPage() != 0) {
+            _view.setPage(0);
+            WatchUi.requestUpdate();
+            return true; // Stay in the app, return to stats page
+        }
+        return false; // Let default system behavior handle it (exit widget)
+    }
 }

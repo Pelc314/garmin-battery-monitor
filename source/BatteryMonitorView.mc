@@ -311,6 +311,18 @@ class BatteryMonitorView extends WatchUi.View {
         _showResetConfirm = !_showResetConfirm;
     }
 
+    function getPage() as Number {
+        return _page;
+    }
+
+    function setPage(page as Number) as Void {
+        _page = page;
+    }
+
+    function isResetConfirmationVisible() as Lang.Boolean {
+        return _showResetConfirm;
+    }
+
     // Handles selection key (GPS)
     function onSelectKey() as Void {
         if (_showResetConfirm) {
