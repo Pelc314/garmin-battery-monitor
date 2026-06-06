@@ -18,19 +18,9 @@ class BatteryMonitorGlanceView extends WatchUi.GlanceView {
 
         var width = dc.getWidth();
         var height = dc.getHeight();
-        var centerY = height / 2;
 
         var stats = System.getSystemStats();
         var battery = stats.battery;
-
-        // Draw left side label
-        dc.drawText(
-            5, 
-            centerY, 
-            Graphics.FONT_MEDIUM, 
-            "BATT MON", 
-            Graphics.TEXT_JUSTIFY_LEFT | Graphics.TEXT_JUSTIFY_VCENTER
-        );
 
         // Fetch pre-calculated custom estimate from persistent storage
         var estDaysVal = Storage.getValue("est_days") as Float?;
@@ -52,14 +42,29 @@ class BatteryMonitorGlanceView extends WatchUi.GlanceView {
             }
         }
 
-        // Draw right side percentage and estimate
-        var rightText = battery.format("%.1f") + "% (" + estString + ")";
+        // Top line: Title
         dc.drawText(
-            width - 5, 
-            centerY, 
-            Graphics.FONT_MEDIUM, 
-            rightText, 
-            Graphics.TEXT_JUSTIFY_RIGHT | Graphics.TEXT_JUSTIFY_VCENTER
+            5, 
+            (height * 0.3).toNumber(), 
+            Graphics.FONT_XTINY, 
+            "Batt Monitor by MPC", 
+            Graphics.TEXT_JUSTIFY_LEFT | Graphics.TEXT_JUSTIFY_VCENTER
+        );
+
+        // Bottom line: Battery state & estimate
+        var bodyText = battery.format("%.1f") + "%";
+        if (stats.charging) {
+            bodyText += " (Charging)";
+        } else if (estString.length() > 0) {
+            bodyText += " (" + estString + ")";
+        }
+
+        dc.drawText(
+            5, 
+            (height * 0.75).toNumber(), 
+            Graphics.FONT_XTINY, 
+            bodyText, 
+            Graphics.TEXT_JUSTIFY_LEFT | Graphics.TEXT_JUSTIFY_VCENTER
         );
     }
 }
