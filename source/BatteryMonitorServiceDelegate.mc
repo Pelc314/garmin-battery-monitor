@@ -45,9 +45,9 @@ class BatteryMonitorServiceDelegate extends System.ServiceDelegate {
         var shouldAppend = true;
         if (timestamps.size() > 0) {
             var lastTime = timestamps[timestamps.size() - 1];
-            // If less than 45 minutes have elapsed, just update the last reading
+            // If less than 5 minutes have elapsed, just update the last reading
             // rather than creating a new hourly record
-            if (now - lastTime < 2700) {
+            if (now - lastTime < 300) {
                 shouldAppend = false;
                 timestamps[timestamps.size() - 1] = now;
                 batteryLevels[batteryLevels.size() - 1] = (battery * 10.0).toNumber();

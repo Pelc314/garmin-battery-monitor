@@ -214,12 +214,20 @@ class BatteryMonitorView extends WatchUi.View {
         // Large Percent
         dc.drawText(leftCenter, 42, Graphics.FONT_MEDIUM, battery.format("%.1f") + "%", Graphics.TEXT_JUSTIFY_CENTER | Graphics.TEXT_JUSTIFY_VCENTER);
         
-        // Custom Estimate
-        var estStr = "Need 24h data";
+        // Custom Estimate falling back to System Native estimate if not enough logs
+        var estStr = "Need 2 logs";
         if (estDays > 0.0) {
             var days = estDays.toNumber();
             var hours = ((estDays - days) * 24.0).toNumber();
             estStr = days.toString() + "d " + hours.toString() + "h left";
+        } else {
+            var stats = System.getSystemStats();
+            if (stats has :batteryInDays && stats.batteryInDays != null && stats.batteryInDays > 0) {
+                var nativeEst = stats.batteryInDays;
+                var days = nativeEst.toNumber();
+                var hours = ((nativeEst - days) * 24.0).toNumber();
+                estStr = days.toString() + "d " + hours.toString() + "h left (sys)";
+            }
         }
         dc.drawText(leftCenter, 64, Graphics.FONT_XTINY, estStr, Graphics.TEXT_JUSTIFY_CENTER | Graphics.TEXT_JUSTIFY_VCENTER);
 
