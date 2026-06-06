@@ -251,20 +251,23 @@ class BatteryMonitorView extends WatchUi.View {
     private function drawGraphPage(dc as Dc, timestamps as Array<Number>?, batteryLevels as Array<Number>?, chargingStates as Array<Number>?, size as Number) as Void {
         var pointsToDraw = 24;
         var durationLabel = "24h";
+        var windowSecs = 24 * 3600;
+        var threshold = 2;
+        var thresholdMsg = "Need 2 data points";
         
         if (_graphDuration == 1) {
             pointsToDraw = 168; // 7 days
             durationLabel = "7d";
+            windowSecs = 168 * 3600;
+            threshold = 6;
+            thresholdMsg = "Need 6h of logs";
         } else if (_graphDuration == 2) {
             pointsToDraw = 720; // 30 days
             durationLabel = "30d";
+            windowSecs = 720 * 3600;
+            threshold = 12;
+            thresholdMsg = "Need 12h of logs";
         }
-
-        var startIdx = size - pointsToDraw;
-        if (startIdx < 0) {
-            startIdx = 0;
-        }
-        var numPoints = size - startIdx;
 
         // Title (centered on the left column matching Page 1 and safe from top-left clipping)
         dc.drawText(60, 20, Graphics.FONT_XTINY, "HISTORY: " + durationLabel, Graphics.TEXT_JUSTIFY_CENTER | Graphics.TEXT_JUSTIFY_VCENTER);
@@ -284,22 +287,44 @@ class BatteryMonitorView extends WatchUi.View {
         dc.drawText(gx - 3, gy + gh, Graphics.FONT_XTINY, "0", Graphics.TEXT_JUSTIFY_RIGHT | Graphics.TEXT_JUSTIFY_VCENTER);
         dc.drawText(gx - 3, gy + gh / 2, Graphics.FONT_XTINY, "50", Graphics.TEXT_JUSTIFY_RIGHT | Graphics.TEXT_JUSTIFY_VCENTER);
 
-        if (numPoints < 2 || batteryLevels == null || chargingStates == null) {
-            // No data message
-            dc.drawText(gx + gw / 2, gy + gh / 2, Graphics.FONT_XTINY, "Collecting data...", Graphics.TEXT_JUSTIFY_CENTER | Graphics.TEXT_JUSTIFY_VCENTER);
+        var now = Time.now().value();
+        var windowStart = now - windowSecs;
+
+        // Count how many logged points fall within this time window
+        var validStartIdx = size;
+        if (timestamps != null) {
+            for (var i = 0; i < size; i++) {
+                if (timestamps[i] >= windowStart) {
+                    validStartIdx = i;
+                    break;
+                }
+            }
+        }
+        var validPoints = size - validStartIdx;
+
+        if (validPoints < threshold || batteryLevels == null || chargingStates == null || timestamps == null) {
+            // Display message that more data needs to be collected
+            dc.drawText(gx + gw / 2, gy + gh / 2, Graphics.FONT_XTINY, thresholdMsg, Graphics.TEXT_JUSTIFY_CENTER | Graphics.TEXT_JUSTIFY_VCENTER);
         } else {
-            // Plot battery points
+            // Plot battery points using temporal scaling
             var prevX = 0;
             var prevY = 0;
+            var first = true;
             
-            for (var i = 0; i < numPoints; i++) {
-                var idx = startIdx + i;
+            for (var i = 0; i < validPoints; i++) {
+                var idx = validStartIdx + i;
+                var t = timestamps[idx];
                 var valY = batteryLevels[idx] / 10.0; // Float %
                 
-                var x = gx + (i.toFloat() / (numPoints - 1).toFloat() * gw).toNumber();
+                // Temporal mapping: ratio from 0.0 (windowStart) to 1.0 (now)
+                var ratio = (t - windowStart).toFloat() / windowSecs.toFloat();
+                if (ratio < 0.0) { ratio = 0.0; }
+                if (ratio > 1.0) { ratio = 1.0; }
+                
+                var x = gx + (ratio * gw).toNumber();
                 var y = gy + gh - (valY / 100.0 * gh).toNumber();
 
-                if (i > 0) {
+                if (!first) {
                     // Highlight charging intervals with double lines
                     if (chargingStates[idx] == 1) {
                         dc.drawLine(prevX, prevY, x, y);
@@ -307,25 +332,23 @@ class BatteryMonitorView extends WatchUi.View {
                     } else {
                         dc.drawLine(prevX, prevY, x, y);
                     }
+                } else {
+                    first = false;
                 }
                 prevX = x;
                 prevY = y;
             }
             
             // Draw X-axis ticks and labels
-            var startSecs = timestamps[startIdx];
-            var midSecs = timestamps[startIdx + numPoints / 2];
-            var endSecs = timestamps[size - 1];
-            
             var labelLeft = "";
             var labelMid = "";
             var labelRight = "";
             
             if (_graphDuration == 0) {
                 // 24h: show hour of the day (e.g. 14h)
-                var infoLeft = Gregorian.info(new Time.Moment(startSecs), Time.FORMAT_SHORT);
-                var infoMid = Gregorian.info(new Time.Moment(midSecs), Time.FORMAT_SHORT);
-                var infoRight = Gregorian.info(new Time.Moment(endSecs), Time.FORMAT_SHORT);
+                var infoLeft = Gregorian.info(new Time.Moment(windowStart), Time.FORMAT_SHORT);
+                var infoMid = Gregorian.info(new Time.Moment(windowStart + 43200), Time.FORMAT_SHORT);
+                var infoRight = Gregorian.info(new Time.Moment(now), Time.FORMAT_SHORT);
                 
                 labelLeft = infoLeft.hour.format("%02d") + "h";
                 labelMid = infoMid.hour.format("%02d") + "h";
@@ -333,9 +356,9 @@ class BatteryMonitorView extends WatchUi.View {
             } else if (_graphDuration == 1) {
                 // 7d: show day names (Mon, Wed, Fri)
                 var days = ["", "Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
-                var infoLeft = Gregorian.info(new Time.Moment(startSecs), Time.FORMAT_SHORT);
-                var infoMid = Gregorian.info(new Time.Moment(midSecs), Time.FORMAT_SHORT);
-                var infoRight = Gregorian.info(new Time.Moment(endSecs), Time.FORMAT_SHORT);
+                var infoLeft = Gregorian.info(new Time.Moment(windowStart), Time.FORMAT_SHORT);
+                var infoMid = Gregorian.info(new Time.Moment(windowStart + 302400), Time.FORMAT_SHORT); // 3.5 days = 302400 seconds
+                var infoRight = Gregorian.info(new Time.Moment(now), Time.FORMAT_SHORT);
                 
                 labelLeft = days[infoLeft.day_of_week];
                 labelMid = days[infoMid.day_of_week];
@@ -354,10 +377,10 @@ class BatteryMonitorView extends WatchUi.View {
             dc.drawLine(gx + gw / 2, gy + gh, gx + gw / 2, gy + gh + 3);
             dc.drawLine(gx + gw, gy + gh, gx + gw, gy + gh + 3);
             
-            // Draw labels centered below ticks (positioned at y = 140 to avoid bottom edge clip)
-            dc.drawText(gx, gy + gh + 9, Graphics.FONT_XTINY, labelLeft, Graphics.TEXT_JUSTIFY_CENTER | Graphics.TEXT_JUSTIFY_VCENTER);
-            dc.drawText(gx + gw / 2, gy + gh + 9, Graphics.FONT_XTINY, labelMid, Graphics.TEXT_JUSTIFY_CENTER | Graphics.TEXT_JUSTIFY_VCENTER);
-            dc.drawText(gx + gw, gy + gh + 9, Graphics.FONT_XTINY, labelRight, Graphics.TEXT_JUSTIFY_CENTER | Graphics.TEXT_JUSTIFY_VCENTER);
+            // Draw labels centered below ticks (positioned at y = 143 to avoid axis overlapping)
+            dc.drawText(gx, gy + gh + 12, Graphics.FONT_XTINY, labelLeft, Graphics.TEXT_JUSTIFY_CENTER | Graphics.TEXT_JUSTIFY_VCENTER);
+            dc.drawText(gx + gw / 2, gy + gh + 12, Graphics.FONT_XTINY, labelMid, Graphics.TEXT_JUSTIFY_CENTER | Graphics.TEXT_JUSTIFY_VCENTER);
+            dc.drawText(gx + gw, gy + gh + 12, Graphics.FONT_XTINY, labelRight, Graphics.TEXT_JUSTIFY_CENTER | Graphics.TEXT_JUSTIFY_VCENTER);
         }
     }
 
