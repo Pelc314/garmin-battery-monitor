@@ -1,0 +1,6 @@
+# Project configuration
+project.manifest = manifest.xml
+
+# Source and resource paths
+base.sourcePath = source
+base.resourcePath = resources
