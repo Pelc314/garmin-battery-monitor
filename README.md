@@ -43,7 +43,7 @@ To build and run this application on your Mac, you need:
 ## Getting Started: VS Code Setup
 
 1. **Open VS Code** and select **File > Open Folder...**.
-2. Open `/Users/maciejpelc/projects/garmin-battery-monitor`.
+2. Open the `garmin-battery-monitor` project folder.
 3. Open the VS Code Extensions Marketplace (`Cmd + Shift + X`), search for **"Monkey C"** (by Garmin), and install it.
 4. Once installed, open the VS Code Command Palette (`Cmd + Shift + P`) and run **"Monkey C: Verify Installation"**.
    - If prompted, download the **Connect IQ SDK Manager** via the link provided.
