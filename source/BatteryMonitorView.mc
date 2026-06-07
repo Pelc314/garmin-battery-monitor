@@ -10,7 +10,7 @@ import Toybox.WatchUi;
 
 class BatteryMonitorView extends WatchUi.View {
 
-    private var _page as Number = 0;             // 0 = Stats Page, 1 = Graph Page
+    private var _page as Number = 0;             // 0 = Battery Stats, 1 = Charging Stats, 2 = Graph Page
     private var _graphDuration as Number = 0;    // 0 = 24h, 1 = 7d, 2 = 30d
     private var _showResetConfirm as Boolean = false;
 
@@ -172,7 +172,9 @@ class BatteryMonitorView extends WatchUi.View {
             drawResetConfirm(dc);
         } else {
             if (_page == 0) {
-                drawStatsPage(dc, battery, estDays, avgDrainRate, acGainedToday, solarGainedToday, solarHoursToday, solarIntensityAvgToday);
+                drawStatsPage(dc, battery, estDays, avgDrainRate);
+            } else if (_page == 1) {
+                drawChargingPage(dc, acGainedToday, solarGainedToday, solarHoursToday, solarIntensityAvgToday);
             } else {
                 drawGraphPage(dc, timestamps, batteryLevels, chargingStates, size);
             }
@@ -184,35 +186,29 @@ class BatteryMonitorView extends WatchUi.View {
     private function drawPageIndicator(dc as Dc) as Void {
         var x = 2;
         var yStart = 60;
-        var yMid = 88;
-        var yEnd = 116;
+        var segmentHeight = 20; // 3 segments of 20 pixels (60 to 120)
         
         dc.setColor(Graphics.COLOR_WHITE, Graphics.COLOR_BLACK);
         dc.setPenWidth(2);
         
-        if (_page == 0) {
-            // Stats page: draw top half of the scrollbar
-            dc.drawLine(x, yStart, x, yMid - 1);
-        } else {
-            // Graph page: draw bottom half of the scrollbar
-            dc.drawLine(x, yMid, x, yEnd);
-        }
+        var activeYStart = yStart + _page * segmentHeight;
+        dc.drawLine(x, activeYStart, x, activeYStart + segmentHeight - 1);
         
         // Reset pen width
         dc.setPenWidth(1);
     }
 
     // Page 1: Statistics
-    private function drawStatsPage(dc as Dc, battery as Float, estDays as Float, avgDrainRate as Float, acGainedToday as Float, solarGainedToday as Float, solarHoursToday as Float, solarIntensityAvgToday as Float) as Void {
+    private function drawStatsPage(dc as Dc, battery as Float, estDays as Float, avgDrainRate as Float) as Void {
         // We center the battery statistics on the left half of the screen (x = 60)
         // to stay clear of both the top-left corner curve and the top-right sub-window.
         var leftCenter = 60;
         
         // Title
-        dc.drawText(leftCenter, 20, Graphics.FONT_XTINY, "BATTERY", Graphics.TEXT_JUSTIFY_CENTER | Graphics.TEXT_JUSTIFY_VCENTER);
+        dc.drawText(leftCenter, 30, Graphics.FONT_XTINY, "BATTERY", Graphics.TEXT_JUSTIFY_CENTER | Graphics.TEXT_JUSTIFY_VCENTER);
         
         // Large Percent
-        dc.drawText(leftCenter, 42, Graphics.FONT_MEDIUM, battery.format("%.1f") + "%", Graphics.TEXT_JUSTIFY_CENTER | Graphics.TEXT_JUSTIFY_VCENTER);
+        dc.drawText(leftCenter, 55, Graphics.FONT_MEDIUM, battery.format("%.1f") + "%", Graphics.TEXT_JUSTIFY_CENTER | Graphics.TEXT_JUSTIFY_VCENTER);
         
         // Custom Estimate falling back to System Native estimate if not enough logs
         var estStr = "Need 2 logs";
@@ -229,30 +225,35 @@ class BatteryMonitorView extends WatchUi.View {
                 estStr = days.toString() + "d " + hours.toString() + "h left (sys)";
             }
         }
-        dc.drawText(leftCenter, 64, Graphics.FONT_XTINY, estStr, Graphics.TEXT_JUSTIFY_CENTER | Graphics.TEXT_JUSTIFY_VCENTER);
+        dc.drawText(leftCenter, 82, Graphics.FONT_XTINY, estStr, Graphics.TEXT_JUSTIFY_CENTER | Graphics.TEXT_JUSTIFY_VCENTER);
 
         // Drain Rate
         var drainStr = "Drain: --";
         if (avgDrainRate > 0.0) {
             drainStr = "Drain: -" + avgDrainRate.format("%.2f") + "%/h";
         }
-        dc.drawText(leftCenter, 78, Graphics.FONT_XTINY, drainStr, Graphics.TEXT_JUSTIFY_CENTER | Graphics.TEXT_JUSTIFY_VCENTER);
+        dc.drawText(leftCenter, 104, Graphics.FONT_XTINY, drainStr, Graphics.TEXT_JUSTIFY_CENTER | Graphics.TEXT_JUSTIFY_VCENTER);
+    }
 
-        // Horizontal line dividing stats and daily charging (below sub-window Y boundaries)
-        dc.drawLine(15, 92, 160, 92);
+    // Page 2: Today's Charging details
+    private function drawChargingPage(dc as Dc, acGainedToday as Float, solarGainedToday as Float, solarHoursToday as Float, solarIntensityAvgToday as Float) as Void {
+        var leftCenter = 55;
 
-        // Today's Charging Header
-        dc.drawText(88, 102, Graphics.FONT_XTINY, "TODAY'S CHARGE", Graphics.TEXT_JUSTIFY_CENTER | Graphics.TEXT_JUSTIFY_VCENTER);
+        // Title split into two lines
+        dc.drawText(leftCenter, 36, Graphics.FONT_XTINY, "TODAY'S", Graphics.TEXT_JUSTIFY_CENTER | Graphics.TEXT_JUSTIFY_VCENTER);
+        dc.drawText(leftCenter, 54, Graphics.FONT_XTINY, "CHARGE", Graphics.TEXT_JUSTIFY_CENTER | Graphics.TEXT_JUSTIFY_VCENTER);
 
-        // Charger details side-by-side (left-aligned relative to center columns to avoid corner clip)
-        dc.drawText(25, 120, Graphics.FONT_XTINY, "AC: +" + acGainedToday.format("%.1f") + "%", Graphics.TEXT_JUSTIFY_LEFT | Graphics.TEXT_JUSTIFY_VCENTER);
-        dc.drawText(95, 120, Graphics.FONT_XTINY, "Sun: +" + solarGainedToday.format("%.1f") + "%", Graphics.TEXT_JUSTIFY_LEFT | Graphics.TEXT_JUSTIFY_VCENTER);
+        // AC Gained
+        dc.drawText(leftCenter, 74, Graphics.FONT_XTINY, "AC: +" + acGainedToday.format("%.1f") + "%", Graphics.TEXT_JUSTIFY_CENTER | Graphics.TEXT_JUSTIFY_VCENTER);
 
-        // Solar exposure details
-        var solarExpStr = "Solar: " + solarHoursToday.format("%.1f") + "h @ avg " + solarIntensityAvgToday.format("%.0f") + "%";
-        dc.drawText(88, 138, Graphics.FONT_XTINY, solarExpStr, Graphics.TEXT_JUSTIFY_CENTER | Graphics.TEXT_JUSTIFY_VCENTER);
-        
-        // Footer instructions are removed to completely clear the bottom octagon boundary and avoid text cutout
+        // Solar Gained
+        dc.drawText(leftCenter, 94, Graphics.FONT_XTINY, "Sun: +" + solarGainedToday.format("%.1f") + "%", Graphics.TEXT_JUSTIFY_CENTER | Graphics.TEXT_JUSTIFY_VCENTER);
+
+        // Solar Time
+        dc.drawText(leftCenter, 114, Graphics.FONT_XTINY, "Exposure: " + solarHoursToday.format("%.1f") + "h", Graphics.TEXT_JUSTIFY_CENTER | Graphics.TEXT_JUSTIFY_VCENTER);
+
+        // Solar Avg Intensity
+        dc.drawText(leftCenter, 134, Graphics.FONT_XTINY, "Avg Sun: " + solarIntensityAvgToday.format("%.0f") + "%", Graphics.TEXT_JUSTIFY_CENTER | Graphics.TEXT_JUSTIFY_VCENTER);
     }
 
     // Page 2: History Graph
@@ -419,12 +420,12 @@ class BatteryMonitorView extends WatchUi.View {
     // Navigation methods
     function nextPage() as Void {
         if (_showResetConfirm) { return; }
-        _page = (_page + 1) % 2;
+        _page = (_page + 1) % 3;
     }
 
     function previousPage() as Void {
         if (_showResetConfirm) { return; }
-        _page = (_page + 1) % 2; // only 2 pages, so same thing
+        _page = (_page - 1 + 3) % 3;
     }
 
     function toggleResetConfirmation() as Void {
@@ -457,7 +458,7 @@ class BatteryMonitorView extends WatchUi.View {
             if (Attention has :playTone) {
                 Attention.playTone(Attention.TONE_RESET);
             }
-        } else if (_page == 1) {
+        } else if (_page == 2) {
             // Cycle duration: 24h (0) -> 7d (1) -> 30d (2)
             _graphDuration = (_graphDuration + 1) % 3;
         } else {
