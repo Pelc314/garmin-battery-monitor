@@ -12,9 +12,8 @@ class BatteryMonitorApp extends Application.AppBase {
         AppBase.initialize();
     }
 
-    // onStart() is called on application start up
     function onStart(state as Dictionary?) as Void {
-        // Register the background service to run every 1 hour (3600 seconds)
+        // Register the background service to run every 20 minutes (1200 seconds)
         // System enforces a minimum of 5 minutes (300 seconds)
         registerBackgroundEvent();
     }
@@ -46,8 +45,8 @@ class BatteryMonitorApp extends Application.AppBase {
     // Registers the temporal background event if not already set or mismatched
     function registerBackgroundEvent() as Void {
         if (System has :ServiceDelegate) {
-            // Register background temporal event for every 1 hour (3600 seconds)
-            Background.registerForTemporalEvent(new Time.Duration(3600));
+            // Register background temporal event for every 20 minutes (1200 seconds)
+            Background.registerForTemporalEvent(new Time.Duration(1200));
         }
     }
 }

@@ -2,7 +2,7 @@
 
 A custom Garmin Connect IQ **Widget** designed and optimized specifically for the **Garmin Instinct 2 Solar** smartwatch. 
 
-This widget logs battery percentage, charger state, and solar charging intensity once per hour in the background, keeping a rolling 30-day history (720 logs) in persistent storage. It calculates custom discharge rates, remaining battery life estimates based on actual usage, and separate daily AC vs. Solar charging gains. It also renders a beautiful monochrome history chart of your battery level and a page scrollbar directly on the watch screen.
+This widget logs battery percentage, charger state, and solar charging intensity every 20 minutes in the background, keeping a rolling 14-day history (1008 logs) in persistent storage (capped to fit within background RAM memory limits). It calculates custom discharge rates, remaining battery life estimates based on actual usage, and separate daily AC vs. Solar charging gains. It also renders a beautiful monochrome history chart of your battery level and a page scrollbar directly on the watch screen.
 
 ---
 
@@ -23,7 +23,7 @@ garmin-battery-monitor/
     ├── BatteryMonitorApp.mc     # Main application lifecycle & service registration
     ├── BatteryMonitorDelegate.mc# Handlers for button interactions (UP/DOWN/GPS/MENU/BACK)
     ├── BatteryMonitorGlanceView.mc# Memory-safe widget glance loop display (on-the-fly estimates)
-    ├── BatteryMonitorServiceDelegate.mc# Background temporal logger (runs hourly)
+    ├── BatteryMonitorServiceDelegate.mc# Background temporal logger (runs every 20 minutes)
     └── BatteryMonitorView.mc    # Core UI, analytics calculations, graph & scrollbar rendering
 ```
 
@@ -62,7 +62,7 @@ To build and run this application on your Mac, you need:
 5. **Seeding Initial Data**:
    - Scroll up/down to see the widget glance **"Batt Monitor by MPC"**.
    - Press the **GPS (Enter)** key to open the widget.
-   - Because the background service only fires once an hour, the graph and analytics will initially show "Collecting data..." or "Need 12h of history".
+   - Because the background service fires every 20 minutes, the graph and analytics will initially show "Collecting data..." or "Need 12h of history".
    - Go to the **Statistics page** (Page 1) and press the **GPS (Enter)** key. Press it a few times (waiting a few seconds in between) to manually record data points immediately.
    - Switch to the **History Graph** (Page 2) by pressing **DOWN**. You will see the graph start to populate!
 6. **Simulating charging states**:
@@ -71,7 +71,7 @@ To build and run this application on your Mac, you need:
    - Slide the **Solar Intensity** slider (above 10) to simulate standing in the sun.
    - Trigger a manual log (GPS key) after changing these settings, and you will see the sub-screen icon change dynamically (Lightning Bolt for AC charging, Sun icon for Solar charging, or battery number for normal discharging).
 7. **Simulating background logs**:
-   - To simulate the background logger running every hour, go to **Simulation > Background Event** in the simulator menu. This will trigger the background `onTemporalEvent` log manually.
+   - To simulate the background logger running, go to **Simulation > Background Event** in the simulator menu. This will trigger the background `onTemporalEvent` log manually.
 
 ---
 

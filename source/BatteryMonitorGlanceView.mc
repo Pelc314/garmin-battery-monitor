@@ -13,6 +13,9 @@ class BatteryMonitorGlanceView extends WatchUi.GlanceView {
 
     // Update the glance draw context
     function onUpdate(dc as Dc) as Void {
+        // Log current state dynamically when viewing the glance
+        BatteryLogger.logCurrentState();
+
         dc.setColor(Graphics.COLOR_WHITE, Graphics.COLOR_BLACK);
         dc.clear();
 

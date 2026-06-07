@@ -16,6 +16,7 @@ class BatteryMonitorView extends WatchUi.View {
 
     function initialize() {
         View.initialize();
+        BatteryLogger.logCurrentState();
     }
 
     function onLayout(dc as Dc) as Void {
@@ -79,8 +80,17 @@ class BatteryMonitorView extends WatchUi.View {
                     if (gain > 0.0) {
                         if (chargingStates[i] == 1 || chargingStates[i-1] == 1) {
                             acGainedToday += gain;
-                        } else if (solarIntensities[i] > 0) {
-                            solarGainedToday += gain;
+                        } else {
+                            // If we missed the charging state transition (e.g. charged in-between logs),
+                            // distinguish AC charging from Solar charging based on the gain rate.
+                            // Solar charging on Instinct 2 Solar is slow (max ~1.5% - 2.0% per hour under peak sun).
+                            // If the gain rate exceeds 2.5% per hour, or solar intensity is 0, attribute it to AC.
+                            var gainRatePerHour = dt > 0.0 ? (gain / dt) : 0.0;
+                            if (solarIntensities[i] == 0 || gainRatePerHour > 2.5) {
+                                acGainedToday += gain;
+                            } else if (solarIntensities[i] > 0) {
+                                solarGainedToday += gain;
+                            }
                         }
                     }
                     
@@ -565,47 +575,6 @@ class BatteryMonitorView extends WatchUi.View {
 
     // Manual data logger invocation
     function triggerManualLog() as Void {
-        var now = Time.now().value();
-        var stats = System.getSystemStats();
-        var battery = stats.battery;
-        var isCharging = stats.charging ? 1 : 0;
-        
-        var solar = 0;
-        if (stats has :solarIntensity && stats.solarIntensity != null) {
-            solar = stats.solarIntensity;
-        }
-
-        var timestamps = Storage.getValue("timestamps") as Array<Number>?;
-        var batteryLevels = Storage.getValue("batteryLevels") as Array<Number>?;
-        var chargingStates = Storage.getValue("chargingStates") as Array<Number>?;
-        var solarIntensities = Storage.getValue("solarIntensities") as Array<Number>?;
-
-        if (timestamps == null) { timestamps = [] as Array<Number>; }
-        if (batteryLevels == null) { batteryLevels = [] as Array<Number>; }
-        if (chargingStates == null) { chargingStates = [] as Array<Number>; }
-        if (solarIntensities == null) { solarIntensities = [] as Array<Number>; }
-
-        // Limit double presses within 3 seconds
-        if (timestamps.size() > 0 && now - timestamps[timestamps.size() - 1] < 3) {
-            return;
-        }
-
-        timestamps.add(now);
-        batteryLevels.add((battery * 10.0).toNumber());
-        chargingStates.add(isCharging);
-        solarIntensities.add(solar);
-
-        // Roll over limits
-        if (timestamps.size() > 720) {
-            timestamps = timestamps.slice(1, null);
-            batteryLevels = batteryLevels.slice(1, null);
-            chargingStates = chargingStates.slice(1, null);
-            solarIntensities = solarIntensities.slice(1, null);
-        }
-
-        Storage.setValue("timestamps", timestamps);
-        Storage.setValue("batteryLevels", batteryLevels);
-        Storage.setValue("chargingStates", chargingStates);
-        Storage.setValue("solarIntensities", solarIntensities);
+        BatteryLogger.logCurrentState();
     }
 }
