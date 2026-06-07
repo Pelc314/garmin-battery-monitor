@@ -195,8 +195,9 @@ class BatteryMonitorView extends WatchUi.View {
     // Draws a thin vertical scrollbar line on the far-left edge of the screen
     private function drawPageIndicator(dc as Dc) as Void {
         var x = 2;
-        var yStart = 60;
-        var segmentHeight = 20; // 3 segments of 20 pixels (60 to 120)
+        var height = dc.getHeight();
+        var yStart = (height <= 156) ? 50 : 60;
+        var segmentHeight = (height <= 156) ? 18 : 20; // 3 segments
         
         dc.setColor(Graphics.COLOR_WHITE, Graphics.COLOR_BLACK);
         dc.setPenWidth(2);
@@ -210,15 +211,23 @@ class BatteryMonitorView extends WatchUi.View {
 
     // Page 1: Statistics
     private function drawStatsPage(dc as Dc, battery as Float, estDays as Float, avgDrainRate as Float) as Void {
-        // We center the battery statistics on the left half of the screen (x = 60)
+        var width = dc.getWidth();
+        var height = dc.getHeight();
+        
+        // We center the battery statistics on the left half of the screen
         // to stay clear of both the top-left corner curve and the top-right sub-window.
-        var leftCenter = 60;
+        var leftCenter = (width <= 156) ? 50 : 60;
+        
+        var yTitle = (height <= 156) ? 26 : 30;
+        var yPercent = (height <= 156) ? 48 : 55;
+        var yEst = (height <= 156) ? 72 : 82;
+        var yDrain = (height <= 156) ? 94 : 104;
         
         // Title
-        dc.drawText(leftCenter, 30, Graphics.FONT_XTINY, "BATTERY", Graphics.TEXT_JUSTIFY_CENTER | Graphics.TEXT_JUSTIFY_VCENTER);
+        dc.drawText(leftCenter, yTitle, Graphics.FONT_XTINY, "BATTERY", Graphics.TEXT_JUSTIFY_CENTER | Graphics.TEXT_JUSTIFY_VCENTER);
         
         // Large Percent
-        dc.drawText(leftCenter, 55, Graphics.FONT_MEDIUM, battery.format("%.1f") + "%", Graphics.TEXT_JUSTIFY_CENTER | Graphics.TEXT_JUSTIFY_VCENTER);
+        dc.drawText(leftCenter, yPercent, Graphics.FONT_MEDIUM, battery.format("%.1f") + "%", Graphics.TEXT_JUSTIFY_CENTER | Graphics.TEXT_JUSTIFY_VCENTER);
         
         // Custom Estimate falling back to System Native estimate if not enough logs
         var estStr = "Need 2 logs";
@@ -235,35 +244,45 @@ class BatteryMonitorView extends WatchUi.View {
                 estStr = days.toString() + "d " + hours.toString() + "h left (sys)";
             }
         }
-        dc.drawText(leftCenter, 82, Graphics.FONT_XTINY, estStr, Graphics.TEXT_JUSTIFY_CENTER | Graphics.TEXT_JUSTIFY_VCENTER);
+        dc.drawText(leftCenter, yEst, Graphics.FONT_XTINY, estStr, Graphics.TEXT_JUSTIFY_CENTER | Graphics.TEXT_JUSTIFY_VCENTER);
 
         // Drain Rate
         var drainStr = "Drain: --";
         if (avgDrainRate > 0.0) {
             drainStr = "Drain: -" + avgDrainRate.format("%.2f") + "%/h";
         }
-        dc.drawText(leftCenter, 104, Graphics.FONT_XTINY, drainStr, Graphics.TEXT_JUSTIFY_CENTER | Graphics.TEXT_JUSTIFY_VCENTER);
+        dc.drawText(leftCenter, yDrain, Graphics.FONT_XTINY, drainStr, Graphics.TEXT_JUSTIFY_CENTER | Graphics.TEXT_JUSTIFY_VCENTER);
     }
 
     // Page 2: Today's Charging details
     private function drawChargingPage(dc as Dc, acGainedToday as Float, solarGainedToday as Float, solarHoursToday as Float, solarIntensityAvgToday as Float) as Void {
-        var leftCenter = 55;
+        var width = dc.getWidth();
+        var height = dc.getHeight();
+        
+        var leftCenter = (width <= 156) ? 50 : 55;
+
+        var yTitle1 = (height <= 156) ? 28 : 36;
+        var yTitle2 = (height <= 156) ? 44 : 54;
+        var yAc = (height <= 156) ? 62 : 74;
+        var ySun = (height <= 156) ? 80 : 94;
+        var yExp = (height <= 156) ? 98 : 114;
+        var yAvgSun = (height <= 156) ? 116 : 134;
 
         // Title split into two lines
-        dc.drawText(leftCenter, 36, Graphics.FONT_XTINY, "TODAY'S", Graphics.TEXT_JUSTIFY_CENTER | Graphics.TEXT_JUSTIFY_VCENTER);
-        dc.drawText(leftCenter, 54, Graphics.FONT_XTINY, "CHARGE", Graphics.TEXT_JUSTIFY_CENTER | Graphics.TEXT_JUSTIFY_VCENTER);
+        dc.drawText(leftCenter, yTitle1, Graphics.FONT_XTINY, "TODAY'S", Graphics.TEXT_JUSTIFY_CENTER | Graphics.TEXT_JUSTIFY_VCENTER);
+        dc.drawText(leftCenter, yTitle2, Graphics.FONT_XTINY, "CHARGE", Graphics.TEXT_JUSTIFY_CENTER | Graphics.TEXT_JUSTIFY_VCENTER);
 
         // AC Gained
-        dc.drawText(leftCenter, 74, Graphics.FONT_XTINY, "AC: +" + acGainedToday.format("%.1f") + "%", Graphics.TEXT_JUSTIFY_CENTER | Graphics.TEXT_JUSTIFY_VCENTER);
+        dc.drawText(leftCenter, yAc, Graphics.FONT_XTINY, "AC: +" + acGainedToday.format("%.1f") + "%", Graphics.TEXT_JUSTIFY_CENTER | Graphics.TEXT_JUSTIFY_VCENTER);
 
         // Solar Gained
-        dc.drawText(leftCenter, 94, Graphics.FONT_XTINY, "Sun: +" + solarGainedToday.format("%.1f") + "%", Graphics.TEXT_JUSTIFY_CENTER | Graphics.TEXT_JUSTIFY_VCENTER);
+        dc.drawText(leftCenter, ySun, Graphics.FONT_XTINY, "Sun: +" + solarGainedToday.format("%.1f") + "%", Graphics.TEXT_JUSTIFY_CENTER | Graphics.TEXT_JUSTIFY_VCENTER);
 
         // Solar Time
-        dc.drawText(leftCenter, 114, Graphics.FONT_XTINY, "Exposure: " + solarHoursToday.format("%.1f") + "h", Graphics.TEXT_JUSTIFY_CENTER | Graphics.TEXT_JUSTIFY_VCENTER);
+        dc.drawText(leftCenter, yExp, Graphics.FONT_XTINY, "Exposure: " + solarHoursToday.format("%.1f") + "h", Graphics.TEXT_JUSTIFY_CENTER | Graphics.TEXT_JUSTIFY_VCENTER);
 
         // Solar Avg Intensity
-        dc.drawText(leftCenter, 134, Graphics.FONT_XTINY, "Avg Sun: " + solarIntensityAvgToday.format("%.0f") + "%", Graphics.TEXT_JUSTIFY_CENTER | Graphics.TEXT_JUSTIFY_VCENTER);
+        dc.drawText(leftCenter, yAvgSun, Graphics.FONT_XTINY, "Avg Sun: " + solarIntensityAvgToday.format("%.0f") + "%", Graphics.TEXT_JUSTIFY_CENTER | Graphics.TEXT_JUSTIFY_VCENTER);
     }
 
     // Page 2: History Graph
@@ -285,14 +304,27 @@ class BatteryMonitorView extends WatchUi.View {
             thresholdMsg = "Need 7d of history";
         }
 
-        // Title (centered on the left column matching Page 1 and safe from top-left clipping)
-        dc.drawText(54, 45, Graphics.FONT_XTINY, "HISTORY: " + durationLabel, Graphics.TEXT_JUSTIFY_CENTER | Graphics.TEXT_JUSTIFY_VCENTER);
+        var width = dc.getWidth();
+        var height = dc.getHeight();
 
-        // Graph Bounds
         var gx = 25;
         var gy = 74; // Lowered top of graph to 74 to clear the top-right circular subscreen
         var gw = 125;
         var gh = 57; // Adjusted height so gy + gh = 131 remains constant (keeping X axis position unchanged)
+
+        if (width <= 156) {
+            // Instinct 2S screen dimensions optimization
+            gx = 20;
+            gw = 115;
+            gy = 68;
+            gh = 50;
+        }
+
+        var titleX = (width <= 156) ? 48 : 54;
+        var titleY = (height <= 156) ? 38 : 45;
+
+        // Title (centered on the left column matching Page 1 and safe from top-left clipping)
+        dc.drawText(titleX, titleY, Graphics.FONT_XTINY, "HISTORY: " + durationLabel, Graphics.TEXT_JUSTIFY_CENTER | Graphics.TEXT_JUSTIFY_VCENTER);
 
         var now = Time.now().value();
         var windowStart = now - windowSecs;
@@ -514,10 +546,13 @@ class BatteryMonitorView extends WatchUi.View {
 
     // Page 3: Reset Confirmation
     private function drawResetConfirm(dc as Dc) as Void {
-        dc.drawText(88, 40, Graphics.FONT_SMALL, "RESET LOGS?", Graphics.TEXT_JUSTIFY_CENTER | Graphics.TEXT_JUSTIFY_VCENTER);
-        dc.drawText(88, 75, Graphics.FONT_XTINY, "This wipes all history.", Graphics.TEXT_JUSTIFY_CENTER | Graphics.TEXT_JUSTIFY_VCENTER);
-        dc.drawText(88, 115, Graphics.FONT_XTINY, "GPS: Confirm Reset", Graphics.TEXT_JUSTIFY_CENTER | Graphics.TEXT_JUSTIFY_VCENTER);
-        dc.drawText(88, 135, Graphics.FONT_XTINY, "BACK: Cancel Reset", Graphics.TEXT_JUSTIFY_CENTER | Graphics.TEXT_JUSTIFY_VCENTER);
+        var cx = dc.getWidth() / 2;
+        var cy = dc.getHeight() / 2;
+        
+        dc.drawText(cx, cy - 45, Graphics.FONT_SMALL, "RESET LOGS?", Graphics.TEXT_JUSTIFY_CENTER | Graphics.TEXT_JUSTIFY_VCENTER);
+        dc.drawText(cx, cy - 10, Graphics.FONT_XTINY, "This wipes all history.", Graphics.TEXT_JUSTIFY_CENTER | Graphics.TEXT_JUSTIFY_VCENTER);
+        dc.drawText(cx, cy + 27, Graphics.FONT_XTINY, "GPS: Confirm Reset", Graphics.TEXT_JUSTIFY_CENTER | Graphics.TEXT_JUSTIFY_VCENTER);
+        dc.drawText(cx, cy + 47, Graphics.FONT_XTINY, "BACK: Cancel Reset", Graphics.TEXT_JUSTIFY_CENTER | Graphics.TEXT_JUSTIFY_VCENTER);
     }
 
     // Navigation methods
