@@ -280,17 +280,19 @@ class BatteryMonitorView extends WatchUi.View {
 
         // Graph Bounds
         var gx = 25;
-        var gy = 56;
+        var gy = 64; // Lowered top of graph to 64 to clear the top-right circular subscreen
         var gw = 125;
-        var gh = 75;
+        var gh = 67; // Adjusted height so gy + gh = 131 remains constant (keeping X axis position unchanged)
 
         // Draw bounding box
         dc.drawLine(gx, gy + gh, gx + gw, gy + gh); // X axis
         dc.drawLine(gx, gy, gx, gy + gh);           // Y axis
 
         // Draw Y labels
-        dc.drawText(gx - 3, gy, Graphics.FONT_XTINY, "100", Graphics.TEXT_JUSTIFY_RIGHT | Graphics.TEXT_JUSTIFY_VCENTER);
-        dc.drawText(gx - 3, gy + gh, Graphics.FONT_XTINY, "0", Graphics.TEXT_JUSTIFY_RIGHT | Graphics.TEXT_JUSTIFY_VCENTER);
+        // Move "100" label 2 pixels to the right (gx - 1) to prevent left-edge squircle clipping
+        dc.drawText(gx - 1, gy, Graphics.FONT_XTINY, "100", Graphics.TEXT_JUSTIFY_RIGHT | Graphics.TEXT_JUSTIFY_VCENTER);
+        // Move "0" label 7 pixels up (gy + gh - 7) to prevent overlap with the X-axis tick labels below it
+        dc.drawText(gx - 3, gy + gh - 7, Graphics.FONT_XTINY, "0", Graphics.TEXT_JUSTIFY_RIGHT | Graphics.TEXT_JUSTIFY_VCENTER);
         dc.drawText(gx - 3, gy + gh / 2, Graphics.FONT_XTINY, "50", Graphics.TEXT_JUSTIFY_RIGHT | Graphics.TEXT_JUSTIFY_VCENTER);
 
         var now = Time.now().value();
