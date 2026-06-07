@@ -276,13 +276,13 @@ class BatteryMonitorView extends WatchUi.View {
         }
 
         // Title (centered on the left column matching Page 1 and safe from top-left clipping)
-        dc.drawText(60, 20, Graphics.FONT_XTINY, "HISTORY: " + durationLabel, Graphics.TEXT_JUSTIFY_CENTER | Graphics.TEXT_JUSTIFY_VCENTER);
+        dc.drawText(54, 45, Graphics.FONT_XTINY, "HISTORY: " + durationLabel, Graphics.TEXT_JUSTIFY_CENTER | Graphics.TEXT_JUSTIFY_VCENTER);
 
         // Graph Bounds
         var gx = 25;
-        var gy = 64; // Lowered top of graph to 64 to clear the top-right circular subscreen
+        var gy = 74; // Lowered top of graph to 74 to clear the top-right circular subscreen
         var gw = 125;
-        var gh = 67; // Adjusted height so gy + gh = 131 remains constant (keeping X axis position unchanged)
+        var gh = 57; // Adjusted height so gy + gh = 131 remains constant (keeping X axis position unchanged)
 
         // Draw bounding box
         dc.drawLine(gx, gy + gh, gx + gw, gy + gh); // X axis
@@ -333,17 +333,55 @@ class BatteryMonitorView extends WatchUi.View {
             // Display message that more data needs to be collected
             dc.drawText(gx + gw / 2, gy + gh / 2, Graphics.FONT_XTINY, thresholdMsg, Graphics.TEXT_JUSTIFY_CENTER | Graphics.TEXT_JUSTIFY_VCENTER);
         } else {
-            // Plot battery points using temporal scaling
+            // 1. Build and fill the polygon for the area under the curve (using downsampling to avoid out-of-memory)
+            var pts = [] as Array< Array<Number> >;
+            var lastAddedX = -1;
+            var firstPt = true;
+            var lastX = 0;
+            
+            for (var i = 0; i < validPoints; i++) {
+                var idx = validStartIdx + i;
+                var t = timestamps[idx];
+                var valY = batteryLevels[idx] / 10.0;
+                
+                var ratio = (t - windowStart).toFloat() / windowSecs.toFloat();
+                if (ratio < 0.0) { ratio = 0.0; }
+                if (ratio > 1.0) { ratio = 1.0; }
+                
+                var x = gx + (ratio * gw).toNumber();
+                var y = gy + gh - (valY / 100.0 * gh).toNumber();
+                
+                if (firstPt) {
+                    pts.add([x, gy + gh] as Array<Number>);
+                    pts.add([x, y] as Array<Number>);
+                    lastAddedX = x;
+                    firstPt = false;
+                } else {
+                    if (x != lastAddedX || i == validPoints - 1) {
+                        pts.add([x, y] as Array<Number>);
+                        lastAddedX = x;
+                    }
+                }
+                lastX = x;
+            }
+            
+            if (pts.size() > 2) {
+                pts.add([lastX, gy + gh] as Array<Number>);
+                dc.setColor(Graphics.COLOR_LT_GRAY, Graphics.COLOR_BLACK);
+                dc.fillPolygon(pts as Array);
+            }
+
+            // 2. Plot white battery points line on top of the gray area
             var prevX = 0;
             var prevY = 0;
             var first = true;
             
+            dc.setColor(Graphics.COLOR_WHITE, Graphics.COLOR_BLACK);
             for (var i = 0; i < validPoints; i++) {
                 var idx = validStartIdx + i;
                 var t = timestamps[idx];
                 var valY = batteryLevels[idx] / 10.0; // Float %
                 
-                // Temporal mapping: ratio from 0.0 (windowStart) to 1.0 (now)
                 var ratio = (t - windowStart).toFloat() / windowSecs.toFloat();
                 if (ratio < 0.0) { ratio = 0.0; }
                 if (ratio > 1.0) { ratio = 1.0; }
@@ -365,6 +403,11 @@ class BatteryMonitorView extends WatchUi.View {
                 prevX = x;
                 prevY = y;
             }
+
+            // 3. Redraw white bounding box lines to ensure they are crisp on top of the gray fill
+            dc.setColor(Graphics.COLOR_WHITE, Graphics.COLOR_BLACK);
+            dc.drawLine(gx, gy + gh, gx + gw, gy + gh); // X axis
+            dc.drawLine(gx, gy, gx, gy + gh);           // Y axis
             
             // Draw X-axis ticks and labels
             var labelLeft = "";
