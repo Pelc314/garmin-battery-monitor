@@ -54,9 +54,9 @@ module BatteryLogger {
             chargingStates.add(isCharging);
             solarIntensities.add(solar);
 
-            // Maintain rolling 14-day history cap (1008 entries at 20-minute intervals)
-            // Capped at 1008 to prevent Out Of Memory (OOM) errors in background RAM (32KB limit on Instinct 2)
-            if (timestamps.size() > 1008) {
+            // Maintain rolling 20-day history cap (960 entries at 30-minute intervals)
+            // Capped at 960 to prevent Out Of Memory (OOM) errors in background RAM (32KB limit on Instinct 2)
+            if (timestamps.size() > 960) {
                 timestamps = timestamps.slice(1, null);
                 batteryLevels = batteryLevels.slice(1, null);
                 chargingStates = chargingStates.slice(1, null);

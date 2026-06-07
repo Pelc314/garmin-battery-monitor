@@ -2,7 +2,7 @@
 
 A custom Garmin Connect IQ **Widget** that logs battery level, charging states, and solar intensity, featuring responsive layouts for both dual-screen Instinct watches and standard circular face watches.
 
-This widget logs battery percentage, charger state, and solar charging intensity every 20 minutes in the background, keeping a rolling 14-day history (1008 logs) in persistent storage (capped to fit within background RAM memory limits). It calculates custom discharge rates, remaining battery life estimates based on actual usage, and separate daily AC vs. Solar charging gains. It also renders a beautiful monochrome history chart of your battery level and a page scrollbar directly on the watch screen.
+This widget logs battery percentage, charger state, and solar charging intensity every 30 minutes in the background, keeping a rolling 20-day history (960 logs) in persistent storage (capped to fit within background RAM memory limits). It calculates custom discharge rates, remaining battery life estimates based on actual usage, and separate daily AC vs. Solar charging gains. It also renders a beautiful monochrome history chart of your battery level and a page scrollbar directly on the watch screen.
 
 ---
 
@@ -36,7 +36,7 @@ garmin-battery-monitor/
     ├── BatteryMonitorApp.mc     # Main application lifecycle & service registration
     ├── BatteryMonitorDelegate.mc# Handlers for button interactions (UP/DOWN/GPS/MENU/BACK)
     ├── BatteryMonitorGlanceView.mc# Memory-safe widget glance loop display (on-the-fly estimates)
-    ├── BatteryMonitorServiceDelegate.mc# Background temporal logger (runs every 20 minutes)
+    ├── BatteryMonitorServiceDelegate.mc# Background temporal logger (runs every 30 minutes)
     └── BatteryMonitorView.mc    # Core UI, analytics calculations, graph & scrollbar rendering
 ```
 
@@ -75,7 +75,7 @@ To build and run this application on your Mac, you need:
 5. **Seeding Initial Data**:
    - Scroll up/down to see the widget glance **"Batt Monitor by MPC"**.
    - Press the **GPS (Enter)** key to open the widget.
-   - Because the background service fires every 20 minutes, the graph and analytics will initially show "Collecting data..." or "Need 12h of history".
+   - Because the background service fires every 30 minutes, the graph and analytics will initially show "Collecting data..." or "Need 12h of history".
    - Go to the **Statistics page** (Page 1) and press the **GPS (Enter)** key. Press it a few times (waiting a few seconds in between) to manually record data points immediately.
    - Switch to the **History Graph** (Page 2) by pressing **DOWN**. You will see the graph start to populate!
 6. **Simulating charging states**:
@@ -98,7 +98,7 @@ To build and run this application on your Mac, you need:
     - *On Stats Page:* Exits the widget.
 *   **GPS (Enter) Button**:
     - *On Stats Page:* Triggers an immediate manual battery log.
-    - *On Graph Page:* Cycles the graph duration between **24 Hours**, **7 Days**, and **30 Days**.
+    - *On Graph Page:* Cycles the graph duration between **24 Hours**, **7 Days**, and **20 Days**.
 *   **Hold UP (MENU) Button**: Opens the **Reset Logs** screen. Press **GPS** to confirm reset or **BACK** to cancel.
 
 ---

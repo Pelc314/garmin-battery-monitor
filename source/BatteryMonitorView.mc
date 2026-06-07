@@ -11,7 +11,7 @@ import Toybox.WatchUi;
 class BatteryMonitorView extends WatchUi.View {
 
     private var _page as Number = 0;             // 0 = Battery Stats, 1 = Charging Stats, 2 = Graph Page
-    private var _graphDuration as Number = 0;    // 0 = 24h, 1 = 7d, 2 = 30d
+    private var _graphDuration as Number = 0;    // 0 = 24h, 1 = 7d, 2 = 20d
     private var _showResetConfirm as Boolean = false;
 
     function initialize() {
@@ -328,9 +328,9 @@ class BatteryMonitorView extends WatchUi.View {
             windowSecs = 168 * 3600;
             thresholdMsg = "Need 12h of history";
         } else if (_graphDuration == 2) {
-            pointsToDraw = 720; // 30 days
-            durationLabel = "30d";
-            windowSecs = 720 * 3600;
+            pointsToDraw = 960; // 20 days (480 hours)
+            durationLabel = "20d";
+            windowSecs = 20 * 24 * 3600;
             thresholdMsg = "Need 7d of history";
         }
 
@@ -394,14 +394,14 @@ class BatteryMonitorView extends WatchUi.View {
                     hasEnoughData = true;
                 }
             } else {
-                // 30d: need at least 7 days spanned
+                // 20d: need at least 7 days spanned
                 if (durationSpanned >= 604800) {
                     hasEnoughData = true;
                 }
             }
         }
 
-        // Calculate Y-axis range and labels (dynamic for 24h mode, 0-100% for 7d/30d)
+        // Calculate Y-axis range and labels (dynamic for 24h mode, 0-100% for 7d/20d)
         var minY = 0.0;
         var maxY = 100.0;
         var labelTop = "100";
@@ -565,10 +565,10 @@ class BatteryMonitorView extends WatchUi.View {
                 xLabelMid = days[infoMid.day_of_week];
                 xLabelRight = days[infoRight.day_of_week];
             } else {
-                // 30d: show relative day marks D1, D15, D30
+                // 20d: show relative day marks D1, D10, D20
                 xLabelLeft = "D1";
-                xLabelMid = "D15";
-                xLabelRight = "D30";
+                xLabelMid = "D10";
+                xLabelRight = "D20";
             }
             
             dc.setColor(Graphics.COLOR_WHITE, Graphics.COLOR_BLACK);
@@ -638,7 +638,7 @@ class BatteryMonitorView extends WatchUi.View {
                 Attention.playTone(Attention.TONE_RESET);
             }
         } else if (_page == 2) {
-            // Cycle duration: 24h (0) -> 7d (1) -> 30d (2)
+            // Cycle duration: 24h (0) -> 7d (1) -> 20d (2)
             _graphDuration = (_graphDuration + 1) % 3;
         } else {
             // Trigger manual logging point for developer convenience / initial seeding
