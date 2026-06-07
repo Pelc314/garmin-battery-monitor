@@ -196,8 +196,9 @@ class BatteryMonitorView extends WatchUi.View {
     private function drawPageIndicator(dc as Dc) as Void {
         var x = 2;
         var height = dc.getHeight();
-        var yStart = (height <= 156) ? 50 : 60;
-        var segmentHeight = (height <= 156) ? 18 : 20; // 3 segments
+        
+        var yStart = (height * 0.35).toNumber();
+        var segmentHeight = (height * 0.11).toNumber(); // 3 segments
         
         dc.setColor(Graphics.COLOR_WHITE, Graphics.COLOR_BLACK);
         dc.setPenWidth(2);
@@ -213,15 +214,21 @@ class BatteryMonitorView extends WatchUi.View {
     private function drawStatsPage(dc as Dc, battery as Float, estDays as Float, avgDrainRate as Float) as Void {
         var width = dc.getWidth();
         var height = dc.getHeight();
+        var isInstinct = hasSubscreen();
         
-        // We center the battery statistics on the left half of the screen
-        // to stay clear of both the top-left corner curve and the top-right sub-window.
-        var leftCenter = (width <= 156) ? 50 : 60;
+        var leftCenter = width / 2;
+        var yTitle = (height * 0.18).toNumber();
+        var yPercent = (height * 0.38).toNumber();
+        var yEst = (height * 0.60).toNumber();
+        var yDrain = (height * 0.78).toNumber();
         
-        var yTitle = (height <= 156) ? 26 : 30;
-        var yPercent = (height <= 156) ? 48 : 55;
-        var yEst = (height <= 156) ? 72 : 82;
-        var yDrain = (height <= 156) ? 94 : 104;
+        if (isInstinct) {
+            leftCenter = (width <= 156) ? 50 : 60;
+            yTitle = (height <= 156) ? 26 : 30;
+            yPercent = (height <= 156) ? 48 : 55;
+            yEst = (height <= 156) ? 72 : 82;
+            yDrain = (height <= 156) ? 94 : 104;
+        }
         
         // Title
         dc.drawText(leftCenter, yTitle, Graphics.FONT_XTINY, "BATTERY", Graphics.TEXT_JUSTIFY_CENTER | Graphics.TEXT_JUSTIFY_VCENTER);
@@ -258,31 +265,54 @@ class BatteryMonitorView extends WatchUi.View {
     private function drawChargingPage(dc as Dc, acGainedToday as Float, solarGainedToday as Float, solarHoursToday as Float, solarIntensityAvgToday as Float) as Void {
         var width = dc.getWidth();
         var height = dc.getHeight();
+        var isInstinct = hasSubscreen();
         
-        var leftCenter = (width <= 156) ? 50 : 55;
+        var leftCenter = width / 2;
+        var yTitle1 = (height * 0.16).toNumber();
+        var yTitle2 = (height * 0.26).toNumber();
+        var yAc = (height * 0.40).toNumber();
+        var ySun = (height * 0.52).toNumber();
+        var yExp = (height * 0.64).toNumber();
+        var yAvgSun = (height * 0.76).toNumber();
 
-        var yTitle1 = (height <= 156) ? 28 : 36;
-        var yTitle2 = (height <= 156) ? 44 : 54;
-        var yAc = (height <= 156) ? 62 : 74;
-        var ySun = (height <= 156) ? 80 : 94;
-        var yExp = (height <= 156) ? 98 : 114;
-        var yAvgSun = (height <= 156) ? 116 : 134;
+        if (isInstinct) {
+            leftCenter = (width <= 156) ? 50 : 55;
+            yTitle1 = (height <= 156) ? 28 : 36;
+            yTitle2 = (height <= 156) ? 44 : 54;
+            yAc = (height <= 156) ? 62 : 74;
+            ySun = (height <= 156) ? 80 : 94;
+            yExp = (height <= 156) ? 98 : 114;
+            yAvgSun = (height <= 156) ? 116 : 134;
+        }
 
         // Title split into two lines
         dc.drawText(leftCenter, yTitle1, Graphics.FONT_XTINY, "TODAY'S", Graphics.TEXT_JUSTIFY_CENTER | Graphics.TEXT_JUSTIFY_VCENTER);
         dc.drawText(leftCenter, yTitle2, Graphics.FONT_XTINY, "CHARGE", Graphics.TEXT_JUSTIFY_CENTER | Graphics.TEXT_JUSTIFY_VCENTER);
 
-        // AC Gained
-        dc.drawText(leftCenter, yAc, Graphics.FONT_XTINY, "AC: +" + acGainedToday.format("%.1f") + "%", Graphics.TEXT_JUSTIFY_CENTER | Graphics.TEXT_JUSTIFY_VCENTER);
+        // Check solar hardware capability dynamically
+        var stats = System.getSystemStats();
+        var hasSolar = (stats has :solarIntensity);
 
-        // Solar Gained
-        dc.drawText(leftCenter, ySun, Graphics.FONT_XTINY, "Sun: +" + solarGainedToday.format("%.1f") + "%", Graphics.TEXT_JUSTIFY_CENTER | Graphics.TEXT_JUSTIFY_VCENTER);
+        if (hasSolar) {
+            // AC Gained
+            dc.drawText(leftCenter, yAc, Graphics.FONT_XTINY, "AC: +" + acGainedToday.format("%.1f") + "%", Graphics.TEXT_JUSTIFY_CENTER | Graphics.TEXT_JUSTIFY_VCENTER);
 
-        // Solar Time
-        dc.drawText(leftCenter, yExp, Graphics.FONT_XTINY, "Exposure: " + solarHoursToday.format("%.1f") + "h", Graphics.TEXT_JUSTIFY_CENTER | Graphics.TEXT_JUSTIFY_VCENTER);
+            // Solar Gained
+            dc.drawText(leftCenter, ySun, Graphics.FONT_XTINY, "Sun: +" + solarGainedToday.format("%.1f") + "%", Graphics.TEXT_JUSTIFY_CENTER | Graphics.TEXT_JUSTIFY_VCENTER);
 
-        // Solar Avg Intensity
-        dc.drawText(leftCenter, yAvgSun, Graphics.FONT_XTINY, "Avg Sun: " + solarIntensityAvgToday.format("%.0f") + "%", Graphics.TEXT_JUSTIFY_CENTER | Graphics.TEXT_JUSTIFY_VCENTER);
+            // Solar Time
+            dc.drawText(leftCenter, yExp, Graphics.FONT_XTINY, "Exposure: " + solarHoursToday.format("%.1f") + "h", Graphics.TEXT_JUSTIFY_CENTER | Graphics.TEXT_JUSTIFY_VCENTER);
+
+            // Solar Avg Intensity
+            dc.drawText(leftCenter, yAvgSun, Graphics.FONT_XTINY, "Avg Sun: " + solarIntensityAvgToday.format("%.0f") + "%", Graphics.TEXT_JUSTIFY_CENTER | Graphics.TEXT_JUSTIFY_VCENTER);
+        } else {
+            // Hides all solar indicators and vertically centers the AC gained indicator
+            var yCenteredAc = (height * 0.55).toNumber();
+            if (isInstinct) {
+                yCenteredAc = (height <= 156) ? 80 : 90;
+            }
+            dc.drawText(leftCenter, yCenteredAc, Graphics.FONT_XTINY, "AC: +" + acGainedToday.format("%.1f") + "%", Graphics.TEXT_JUSTIFY_CENTER | Graphics.TEXT_JUSTIFY_VCENTER);
+        }
     }
 
     // Page 2: History Graph
@@ -306,24 +336,35 @@ class BatteryMonitorView extends WatchUi.View {
 
         var width = dc.getWidth();
         var height = dc.getHeight();
+        var isInstinct = hasSubscreen();
 
-        var gx = 25;
-        var gy = 74; // Lowered top of graph to 74 to clear the top-right circular subscreen
-        var gw = 125;
-        var gh = 57; // Adjusted height so gy + gh = 131 remains constant (keeping X axis position unchanged)
+        var gw = (width * 0.75).toNumber();
+        var gh = (height * 0.35).toNumber();
+        var gx = (width - gw) / 2;
+        var gy = (height * 0.38).toNumber();
+        
+        var titleX = width / 2;
+        var titleY = (height * 0.22).toNumber();
 
-        if (width <= 156) {
-            // Instinct 2S screen dimensions optimization
-            gx = 20;
-            gw = 115;
-            gy = 68;
-            gh = 50;
+        if (isInstinct) {
+            gx = 25;
+            gy = 74; 
+            gw = 125;
+            gh = 57; 
+            
+            if (width <= 156) {
+                // Instinct 2S screen dimensions optimization
+                gx = 20;
+                gw = 115;
+                gy = 68;
+                gh = 50;
+            }
+            
+            titleX = (width <= 156) ? 48 : 54;
+            titleY = (height <= 156) ? 38 : 45;
         }
 
-        var titleX = (width <= 156) ? 48 : 54;
-        var titleY = (height <= 156) ? 38 : 45;
-
-        // Title (centered on the left column matching Page 1 and safe from top-left clipping)
+        // Title (centered and safe from top-left clipping)
         dc.drawText(titleX, titleY, Graphics.FONT_XTINY, "HISTORY: " + durationLabel, Graphics.TEXT_JUSTIFY_CENTER | Graphics.TEXT_JUSTIFY_VCENTER);
 
         var now = Time.now().value();
@@ -611,5 +652,15 @@ class BatteryMonitorView extends WatchUi.View {
     // Manual data logger invocation
     function triggerManualLog() as Void {
         BatteryLogger.logCurrentState();
+    }
+
+    private function hasSubscreen() as Lang.Boolean {
+        if (WatchUi has :getSubscreen) {
+            var sub = WatchUi.getSubscreen();
+            if (sub != null) {
+                return true;
+            }
+        }
+        return false;
     }
 }
