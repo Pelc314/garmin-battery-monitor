@@ -284,17 +284,6 @@ class BatteryMonitorView extends WatchUi.View {
         var gw = 125;
         var gh = 57; // Adjusted height so gy + gh = 131 remains constant (keeping X axis position unchanged)
 
-        // Draw bounding box
-        dc.drawLine(gx, gy + gh, gx + gw, gy + gh); // X axis
-        dc.drawLine(gx, gy, gx, gy + gh);           // Y axis
-
-        // Draw Y labels
-        // Move "100" label 2 pixels to the right (gx - 1) to prevent left-edge squircle clipping
-        dc.drawText(gx - 1, gy, Graphics.FONT_XTINY, "100", Graphics.TEXT_JUSTIFY_RIGHT | Graphics.TEXT_JUSTIFY_VCENTER);
-        // Move "0" label 7 pixels up (gy + gh - 7) to prevent overlap with the X-axis tick labels below it
-        dc.drawText(gx - 3, gy + gh - 7, Graphics.FONT_XTINY, "0", Graphics.TEXT_JUSTIFY_RIGHT | Graphics.TEXT_JUSTIFY_VCENTER);
-        dc.drawText(gx - 3, gy + gh / 2, Graphics.FONT_XTINY, "50", Graphics.TEXT_JUSTIFY_RIGHT | Graphics.TEXT_JUSTIFY_VCENTER);
-
         var now = Time.now().value();
         var windowStart = now - windowSecs;
 
@@ -329,6 +318,55 @@ class BatteryMonitorView extends WatchUi.View {
             }
         }
 
+        // Calculate Y-axis range and labels (dynamic for 24h mode, 0-100% for 7d/30d)
+        var minY = 0.0;
+        var maxY = 100.0;
+        var labelTop = "100";
+        var labelMid = "50";
+        var labelBot = "0";
+
+        if (hasEnoughData) {
+            if (_graphDuration == 0 && batteryLevels != null) {
+                // 24h mode: calculate dynamic Y-axis range based on actual log min/max
+                var lowest = 100.0;
+                var highest = 0.0;
+                for (var i = 0; i < validPoints; i++) {
+                    var idx = validStartIdx + i;
+                    var val = batteryLevels[idx] / 10.0; // Float %
+                    if (val < lowest) { lowest = val; }
+                    if (val > highest) { highest = val; }
+                }
+                
+                minY = lowest - 15.0;
+                maxY = highest + 15.0;
+                
+                // Clamp boundaries
+                if (minY < 0.0) { minY = 0.0; }
+                if (maxY > 100.0) { maxY = 100.0; }
+                
+                // Avoid divide-by-zero or flat range
+                if (maxY - minY < 1.0) {
+                    minY = 0.0;
+                    maxY = 100.0;
+                }
+                
+                labelTop = maxY.format("%.0f");
+                labelMid = ((minY + maxY) / 2.0).format("%.0f");
+                labelBot = minY.format("%.0f");
+            }
+        }
+
+        // Draw bounding box
+        dc.drawLine(gx, gy + gh, gx + gw, gy + gh); // X axis
+        dc.drawLine(gx, gy, gx, gy + gh);           // Y axis
+
+        // Draw Y labels
+        // Move top label 2 pixels to the right (gx - 1) to prevent left-edge squircle clipping
+        dc.drawText(gx - 1, gy, Graphics.FONT_XTINY, labelTop, Graphics.TEXT_JUSTIFY_RIGHT | Graphics.TEXT_JUSTIFY_VCENTER);
+        // Move bottom label 7 pixels up (gy + gh - 7) to prevent overlap with the X-axis tick labels below it
+        dc.drawText(gx - 3, gy + gh - 7, Graphics.FONT_XTINY, labelBot, Graphics.TEXT_JUSTIFY_RIGHT | Graphics.TEXT_JUSTIFY_VCENTER);
+        dc.drawText(gx - 3, gy + gh / 2, Graphics.FONT_XTINY, labelMid, Graphics.TEXT_JUSTIFY_RIGHT | Graphics.TEXT_JUSTIFY_VCENTER);
+
         if (!hasEnoughData) {
             // Display message that more data needs to be collected
             dc.drawText(gx + gw / 2, gy + gh / 2, Graphics.FONT_XTINY, thresholdMsg, Graphics.TEXT_JUSTIFY_CENTER | Graphics.TEXT_JUSTIFY_VCENTER);
@@ -349,7 +387,12 @@ class BatteryMonitorView extends WatchUi.View {
                 if (ratio > 1.0) { ratio = 1.0; }
                 
                 var x = gx + (ratio * gw).toNumber();
-                var y = gy + gh - (valY / 100.0 * gh).toNumber();
+                
+                // Dynamic Y mapping
+                var valRatio = (valY - minY) / (maxY - minY);
+                if (valRatio < 0.0) { valRatio = 0.0; }
+                if (valRatio > 1.0) { valRatio = 1.0; }
+                var y = gy + gh - (valRatio * gh).toNumber();
                 
                 if (firstPt) {
                     pts.add([x, gy + gh] as Array<Number>);
@@ -387,7 +430,12 @@ class BatteryMonitorView extends WatchUi.View {
                 if (ratio > 1.0) { ratio = 1.0; }
                 
                 var x = gx + (ratio * gw).toNumber();
-                var y = gy + gh - (valY / 100.0 * gh).toNumber();
+                
+                // Dynamic Y mapping
+                var valRatio = (valY - minY) / (maxY - minY);
+                if (valRatio < 0.0) { valRatio = 0.0; }
+                if (valRatio > 1.0) { valRatio = 1.0; }
+                var y = gy + gh - (valRatio * gh).toNumber();
 
                 if (!first) {
                     // Highlight charging intervals with double lines
@@ -410,9 +458,9 @@ class BatteryMonitorView extends WatchUi.View {
             dc.drawLine(gx, gy, gx, gy + gh);           // Y axis
             
             // Draw X-axis ticks and labels
-            var labelLeft = "";
-            var labelMid = "";
-            var labelRight = "";
+            var xLabelLeft = "";
+            var xLabelMid = "";
+            var xLabelRight = "";
             
             if (_graphDuration == 0) {
                 // 24h: show hour of the day (e.g. 14h)
@@ -420,9 +468,9 @@ class BatteryMonitorView extends WatchUi.View {
                 var infoMid = Gregorian.info(new Time.Moment(windowStart + 43200), Time.FORMAT_SHORT);
                 var infoRight = Gregorian.info(new Time.Moment(now), Time.FORMAT_SHORT);
                 
-                labelLeft = infoLeft.hour.format("%02d") + "h";
-                labelMid = infoMid.hour.format("%02d") + "h";
-                labelRight = infoRight.hour.format("%02d") + "h";
+                xLabelLeft = infoLeft.hour.format("%02d") + "h";
+                xLabelMid = infoMid.hour.format("%02d") + "h";
+                xLabelRight = infoRight.hour.format("%02d") + "h";
             } else if (_graphDuration == 1) {
                 // 7d: show day names (Mon, Wed, Fri)
                 var days = ["", "Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
@@ -430,14 +478,14 @@ class BatteryMonitorView extends WatchUi.View {
                 var infoMid = Gregorian.info(new Time.Moment(windowStart + 302400), Time.FORMAT_SHORT); // 3.5 days = 302400 seconds
                 var infoRight = Gregorian.info(new Time.Moment(now), Time.FORMAT_SHORT);
                 
-                labelLeft = days[infoLeft.day_of_week];
-                labelMid = days[infoMid.day_of_week];
-                labelRight = days[infoRight.day_of_week];
+                xLabelLeft = days[infoLeft.day_of_week];
+                xLabelMid = days[infoMid.day_of_week];
+                xLabelRight = days[infoRight.day_of_week];
             } else {
                 // 30d: show relative day marks D1, D15, D30
-                labelLeft = "D1";
-                labelMid = "D15";
-                labelRight = "D30";
+                xLabelLeft = "D1";
+                xLabelMid = "D15";
+                xLabelRight = "D30";
             }
             
             dc.setColor(Graphics.COLOR_WHITE, Graphics.COLOR_BLACK);
@@ -448,9 +496,9 @@ class BatteryMonitorView extends WatchUi.View {
             dc.drawLine(gx + gw, gy + gh, gx + gw, gy + gh + 3);
             
             // Draw labels centered below ticks (positioned at y = 143 to avoid axis overlapping)
-            dc.drawText(gx, gy + gh + 12, Graphics.FONT_XTINY, labelLeft, Graphics.TEXT_JUSTIFY_CENTER | Graphics.TEXT_JUSTIFY_VCENTER);
-            dc.drawText(gx + gw / 2, gy + gh + 12, Graphics.FONT_XTINY, labelMid, Graphics.TEXT_JUSTIFY_CENTER | Graphics.TEXT_JUSTIFY_VCENTER);
-            dc.drawText(gx + gw, gy + gh + 12, Graphics.FONT_XTINY, labelRight, Graphics.TEXT_JUSTIFY_CENTER | Graphics.TEXT_JUSTIFY_VCENTER);
+            dc.drawText(gx, gy + gh + 12, Graphics.FONT_XTINY, xLabelLeft, Graphics.TEXT_JUSTIFY_CENTER | Graphics.TEXT_JUSTIFY_VCENTER);
+            dc.drawText(gx + gw / 2, gy + gh + 12, Graphics.FONT_XTINY, xLabelMid, Graphics.TEXT_JUSTIFY_CENTER | Graphics.TEXT_JUSTIFY_VCENTER);
+            dc.drawText(gx + gw, gy + gh + 12, Graphics.FONT_XTINY, xLabelRight, Graphics.TEXT_JUSTIFY_CENTER | Graphics.TEXT_JUSTIFY_VCENTER);
         }
     }
 
