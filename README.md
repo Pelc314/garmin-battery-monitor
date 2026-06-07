@@ -1,6 +1,6 @@
-# Garmin Instinct 2 Solar Battery Monitor Widget
+# Garmin Instinct 2 & 2S Solar Battery Monitor Widget
 
-A custom Garmin Connect IQ **Widget** designed and optimized specifically for the **Garmin Instinct 2 Solar** smartwatch. 
+A custom Garmin Connect IQ **Widget** designed and optimized specifically for the **Garmin Instinct 2 Solar** and **Instinct 2S Solar** smartwatches (featuring dynamic, responsive layouts for both 176x176 and 156x156 screen sizes).
 
 This widget logs battery percentage, charger state, and solar charging intensity every 20 minutes in the background, keeping a rolling 14-day history (1008 logs) in persistent storage (capped to fit within background RAM memory limits). It calculates custom discharge rates, remaining battery life estimates based on actual usage, and separate daily AC vs. Solar charging gains. It also renders a beautiful monochrome history chart of your battery level and a page scrollbar directly on the watch screen.
 
@@ -48,7 +48,7 @@ To build and run this application on your Mac, you need:
 4. Once installed, open the VS Code Command Palette (`Cmd + Shift + P`) and run **"Monkey C: Verify Installation"**.
    - If prompted, download the **Connect IQ SDK Manager** via the link provided.
    - Run the SDK Manager, download the latest **Connect IQ SDK**, and set it as the **Active SDK** in the Manager's "SDKs" tab.
-   - Under the "Devices" tab, search for **Instinct 2** and download its device profile.
+   - Under the "Devices" tab, search for **Instinct 2** and **Instinct 2S** and download their device profiles.
 5. Restart VS Code so it reads your active SDK configuration.
 
 ---
@@ -57,7 +57,7 @@ To build and run this application on your Mac, you need:
 
 1. Open `source/BatteryMonitorApp.mc` in VS Code.
 2. Press **`F5`** (or go to **Run > Start Debugging**).
-3. If prompted to select a device, choose **`instinct2`**.
+3. If prompted to select a device, choose **`instinct2`** or **`instinct2s`**.
 4. The Connect IQ Simulator will launch and show the watch face. 
 5. **Seeding Initial Data**:
    - Scroll up/down to see the widget glance **"Batt Monitor by MPC"**.
@@ -90,12 +90,12 @@ To build and run this application on your Mac, you need:
 
 ---
 
-## Sideloading onto your physical Instinct 2 Solar
+## Sideloading onto your physical Instinct 2 / 2S Solar
 
 To load the widget onto your watch:
-1. Plug your Garmin Instinct 2 Solar into your Mac using the USB cable. The watch should mount as a USB drive.
+1. Plug your Garmin Instinct 2 or Instinct 2S Solar into your Mac using the USB cable. The watch should mount as a USB drive.
 2. In VS Code, open the Command Palette (`Cmd + Shift + P`) and run **"Monkey C: Build for Device"**.
-3. Select **`instinct2`** as the device.
+3. Select **`instinct2`** or **`instinct2s`** depending on your watch model.
 4. Select a folder on your Mac (e.g., your Desktop) to output the compiled file.
 5. Once the build completes, copy the generated `.prg` file (e.g. `garminbatterymonitor.prg`).
 6. Open your Finder, navigate to the mounted Garmin watch drive, and open the folder **`GARMIN/APPS/`**.
