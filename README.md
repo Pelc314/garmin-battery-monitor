@@ -106,6 +106,10 @@ To build and run this application on your Mac, you need:
 ## Sideloading onto your physical Garmin watch
 
 To load the widget onto your watch:
+1. Move the *.prg file into apps folder on your garmin
+
+or build the app yourself:
+
 1. Plug your Garmin watch into your Mac using the USB cable. The watch should mount as a USB drive.
 2. In VS Code, open the Command Palette (`Cmd + Shift + P`) and run **"Monkey C: Build for Device"**.
 3. Select your watch model (e.g. **`instinct2`**, **`instinct2s`**, **`instincte45mm`**, or **`vivoactive4`**).
