@@ -454,11 +454,11 @@ class BatteryMonitorView extends WatchUi.View {
             // Display message that more data needs to be collected
             dc.drawText(gx + gw / 2, gy + gh / 2, Graphics.FONT_XTINY, thresholdMsg, Graphics.TEXT_JUSTIFY_CENTER | Graphics.TEXT_JUSTIFY_VCENTER);
         } else {
-            // 1. Build and fill the polygon for the area under the curve (using downsampling to avoid out-of-memory)
-            var pts = [] as Array< Array<Number> >;
+            // 1. Build and fill the polygon for the area under the curve in batches
+            // Garmin's dc.fillPolygon has a limit of 64 points. We collect all unique points
+            // on the curve, then draw the shaded area in contiguous batches of at most 40 curve points.
+            var curvePoints = [] as Array< Array<Number> >;
             var lastAddedX = -1;
-            var firstPt = true;
-            var lastX = 0;
             
             for (var i = 0; i < validPoints; i++) {
                 var idx = validStartIdx + i;
@@ -477,24 +477,40 @@ class BatteryMonitorView extends WatchUi.View {
                 if (valRatio > 1.0) { valRatio = 1.0; }
                 var y = gy + gh - (valRatio * gh).toNumber();
                 
-                if (firstPt) {
-                    pts.add([x, gy + gh] as Array<Number>);
-                    pts.add([x, y] as Array<Number>);
+                if (i == 0 || i == validPoints - 1 || x != lastAddedX) {
+                    curvePoints.add([x, y] as Array<Number>);
                     lastAddedX = x;
-                    firstPt = false;
-                } else {
-                    if (x != lastAddedX || i == validPoints - 1) {
-                        pts.add([x, y] as Array<Number>);
-                        lastAddedX = x;
-                    }
                 }
-                lastX = x;
             }
             
-            if (pts.size() > 2) {
-                pts.add([lastX, gy + gh] as Array<Number>);
+            var cpSize = curvePoints.size();
+            if (cpSize >= 2) {
                 dc.setColor(Graphics.COLOR_LT_GRAY, Graphics.COLOR_BLACK);
-                dc.fillPolygon(pts as Array);
+                var batchSize = 40; // Under 64 point limit
+                var startIdx = 0;
+                while (startIdx < cpSize - 1) {
+                    var endIdx = startIdx + batchSize;
+                    if (endIdx >= cpSize) {
+                        endIdx = cpSize - 1;
+                    }
+                    
+                    var poly = [] as Array< Array<Number> >;
+                    
+                    // Bottom-left anchor for this batch
+                    poly.add([curvePoints[startIdx][0], gy + gh] as Array<Number>);
+                    
+                    // Add curve points for this batch
+                    for (var j = startIdx; j <= endIdx; j++) {
+                        poly.add(curvePoints[j]);
+                    }
+                    
+                    // Bottom-right anchor for this batch
+                    poly.add([curvePoints[endIdx][0], gy + gh] as Array<Number>);
+                    
+                    dc.fillPolygon(poly as Array);
+                    
+                    startIdx = endIdx; // Next batch starts where this one ended
+                }
             }
 
             // 2. Plot white battery points line on top of the gray area
