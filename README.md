@@ -19,6 +19,31 @@ The widget's layout adapts dynamically based on whether the target watch feature
 
 ---
 
+## Controls
+
+*   **DOWN Button**: Scrolls to Page 2 (History Graph).
+  <img width="382" height="507" alt="image" src="https://github.com/user-attachments/assets/f866efff-66c8-45c4-914a-22905f3cbad3" />
+
+*   **UP Button**: Scrolls to Page 1 (Statistics).
+
+<img width="380" height="504" alt="image" src="https://github.com/user-attachments/assets/98e28306-324e-4c82-b966-0ddc9006b44d" /> <img width="378" height="503" alt="image" src="https://github.com/user-attachments/assets/438b31c2-d2ec-4445-9a20-44eda6218c38" />
+
+
+*   **BACK Button**:
+    - *On Graph Page:* Navigates back to Page 1 (Statistics).
+    - *On Reset Confirmation:* Cancels reset and returns to your previous page.
+    - *On Stats Page:* Exits the widget.
+*   **GPS (Enter) Button**:
+    - *On Stats Page:* Triggers an immediate manual battery log.
+    - *On Graph Page:* Cycles the graph duration between **24 Hours**, **7 Days**, and **20 Days**.
+*   **Hold UP (MENU) Button**: Opens the **Reset Logs** screen. Press **GPS** to confirm reset or **BACK** to cancel.
+*   **Glance View**:
+
+<img width="377" height="502" alt="image" src="https://github.com/user-attachments/assets/eba2e9ba-4c71-4b7b-8fe7-8dd6a9bb6fc4" />
+
+
+---
+
 ## Folder Structure
 
 ```
@@ -85,31 +110,6 @@ To build and run this application on your Mac, you need:
    - Trigger a manual log (GPS key) after changing these settings, and you will see the sub-screen icon change dynamically (Lightning Bolt for AC charging, Sun icon for Solar charging, or battery number for normal discharging).
 7. **Simulating background logs**:
    - To simulate the background logger running, go to **Simulation > Background Event** in the simulator menu. This will trigger the background `onTemporalEvent` log manually.
-
----
-
-## Controls
-
-*   **DOWN Button**: Scrolls to Page 2 (History Graph).
-  <img width="382" height="507" alt="image" src="https://github.com/user-attachments/assets/f866efff-66c8-45c4-914a-22905f3cbad3" />
-
-*   **UP Button**: Scrolls to Page 1 (Statistics).
-
-<img width="380" height="504" alt="image" src="https://github.com/user-attachments/assets/98e28306-324e-4c82-b966-0ddc9006b44d" /> <img width="378" height="503" alt="image" src="https://github.com/user-attachments/assets/438b31c2-d2ec-4445-9a20-44eda6218c38" />
-
-
-*   **BACK Button**:
-    - *On Graph Page:* Navigates back to Page 1 (Statistics).
-    - *On Reset Confirmation:* Cancels reset and returns to your previous page.
-    - *On Stats Page:* Exits the widget.
-*   **GPS (Enter) Button**:
-    - *On Stats Page:* Triggers an immediate manual battery log.
-    - *On Graph Page:* Cycles the graph duration between **24 Hours**, **7 Days**, and **20 Days**.
-*   **Hold UP (MENU) Button**: Opens the **Reset Logs** screen. Press **GPS** to confirm reset or **BACK** to cancel.
-*   **Glance View**:
-
-<img width="377" height="502" alt="image" src="https://github.com/user-attachments/assets/eba2e9ba-4c71-4b7b-8fe7-8dd6a9bb6fc4" />
-
 
 ---
 
