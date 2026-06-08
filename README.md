@@ -106,7 +106,7 @@ To build and run this application on your Mac, you need:
 ## Sideloading onto your physical Garmin watch
 
 To load the widget onto your watch:
-1. Move the *.prg file into apps folder on your garmin
+1. Move the *.prg file from [**releases**](https://github.com/Pelc314/garmin-battery-monitor/releases) into **apps** folder on your garmin
 
 or build the app yourself:
 
