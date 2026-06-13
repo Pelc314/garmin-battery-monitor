@@ -479,7 +479,7 @@ class BatteryMonitorView extends WatchUi.View {
                 var y = gy + gh - (valRatio * gh).toNumber();
                 
                 if (i == 0 || i == validPoints - 1 || x != lastAddedX) {
-                    curvePoints.add([x, y] as Array<Number>);
+                    curvePoints.add([x, y, chargingStates[idx]] as Array<Number>);
                     lastAddedX = x;
                 }
             }
@@ -502,7 +502,7 @@ class BatteryMonitorView extends WatchUi.View {
                     
                     // Add curve points for this batch
                     for (var j = startIdx; j <= endIdx; j++) {
-                        poly.add(curvePoints[j]);
+                        poly.add([curvePoints[j][0], curvePoints[j][1]] as Array<Number>);
                     }
                     
                     // Bottom-right anchor for this batch
@@ -520,26 +520,15 @@ class BatteryMonitorView extends WatchUi.View {
             var first = true;
             
             dc.setColor(Graphics.COLOR_WHITE, Graphics.COLOR_BLACK);
-            for (var i = 0; i < validPoints; i++) {
-                var idx = validStartIdx + i;
-                var t = timestamps[idx];
-                var valY = batteryLevels[idx] / 10.0; // Float %
-                
-                var ratio = (t - windowStart).toFloat() / windowSecs.toFloat();
-                if (ratio < 0.0) { ratio = 0.0; }
-                if (ratio > 1.0) { ratio = 1.0; }
-                
-                var x = gx + (ratio * gw).toNumber();
-                
-                // Dynamic Y mapping
-                var valRatio = (valY - minY) / (maxY - minY);
-                if (valRatio < 0.0) { valRatio = 0.0; }
-                if (valRatio > 1.0) { valRatio = 1.0; }
-                var y = gy + gh - (valRatio * gh).toNumber();
+            for (var i = 0; i < cpSize; i++) {
+                var pt = curvePoints[i];
+                var x = pt[0];
+                var y = pt[1];
+                var isCharging = pt[2];
 
                 if (!first) {
                     // Highlight charging intervals with double lines
-                    if (chargingStates[idx] == 1) {
+                    if (isCharging == 1) {
                         dc.drawLine(prevX, prevY, x, y);
                         dc.drawLine(prevX, prevY + 1, x, y + 1);
                     } else {
