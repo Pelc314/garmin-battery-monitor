@@ -27,7 +27,8 @@ The widget's layout adapts dynamically based on whether the target watch feature
   <img width="382" height="507" alt="image" src="https://github.com/user-attachments/assets/f866efff-66c8-45c4-914a-22905f3cbad3" />
 
 *   **UP Button**: Scrolls to Page 1 (Statistics) and Page 2 (Charging info).
-  <img width="380" height="504" alt="image" src="https://github.com/user-attachments/assets/98e28306-324e-4c82-b966-0ddc9006b44d" /> <img width="378" height="503" alt="image" src="https://github.com/user-attachments/assets/438b31c2-d2ec-4445-9a20-44eda6218c38" />
+
+<img width="380" height="504" alt="image" src="https://github.com/user-attachments/assets/98e28306-324e-4c82-b966-0ddc9006b44d" /> <img width="378" height="503" alt="image" src="https://github.com/user-attachments/assets/438b31c2-d2ec-4445-9a20-44eda6218c38" />
 
 *   **GPS (Enter) Button**:
     - *On Stats Page (Page 1):* Triggers an immediate manual battery log.
@@ -38,6 +39,11 @@ The widget's layout adapts dynamically based on whether the target watch feature
     - *On Reset Confirmation:* Cancels reset and returns to your previous page.
     - *On Stats Page:* Exits the widget.
 
+*   **Glance View**:
+
+<img width="377" height="502" alt="image" src="https://github.com/user-attachments/assets/eba2e9ba-4c71-4b7b-8fe7-8dd6a9bb6fc4" />
+
+
 ### Touchscreen Watches with Glance (e.g. Venu 2)
 *   **Swipe UP / Swipe DOWN**: Scroll between Page 1 (Statistics), Page 2 (Charging info), and Page 3 (History Graph).
 *   **Screen Tap**:
@@ -45,6 +51,10 @@ The widget's layout adapts dynamically based on whether the target watch feature
     - *On Graph Page (Page 3):* Cycles the graph duration between **24 Hours**, **7 Days**, and **20 Days**.
 *   **Long Press Screen / Action Button**: Opens the **Reset Logs** screen. Tap the screen to confirm reset or press the Back physical button to cancel.
 *   **Swipe Left-to-Right (or physical Back Button)**: Goes back a page, cancels reset, or exits the widget.
+
+*   **Glance View**
+<img width="588" height="757" alt="image" src="https://github.com/user-attachments/assets/badcb80a-a4f0-431a-8007-4521dfba9293" />
+
 
 ### Touchscreen Watches without Glance (e.g. Vívoactive 4)
 *   **Activate Widget**: When scrolling the widget loop, the widget starts in a **passive state** displaying `"Tap to open"` at the bottom. **Tap the screen once** (or press the top-right Action button) to activate it and enable swipe controls.
@@ -54,11 +64,6 @@ The widget's layout adapts dynamically based on whether the target watch feature
     - *On Graph Page (Page 3):* Cycles the graph duration between **24 Hours**, **7 Days**, and **20 Days**.
 *   **Long Press physical Back button**: Opens the **Reset Logs** screen. Tap the screen to confirm reset or press Back to cancel.
 *   **Swipe Left-to-Right (or physical Back Button)**: Exits the active state back to the passive widget loop. Swiping up/down on the passive loop will then scroll to other widgets.
-
-*   **Glance View**:
-
-<img width="377" height="502" alt="image" src="https://github.com/user-attachments/assets/eba2e9ba-4c71-4b7b-8fe7-8dd6a9bb6fc4" />
-
 
 ---
 
