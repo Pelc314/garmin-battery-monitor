@@ -1,3 +1,5 @@
+<img width="1440" height="720" alt="battery_monitor_hero_1440x720" src="https://github.com/user-attachments/assets/22c414e4-11bc-4566-a646-3fd89567232c" />
+
 # Garmin Battery Monitor Widget
 
 A custom Garmin Connect IQ **Widget** that logs battery level, charging states, and solar intensity, featuring responsive layouts for both dual-screen Instinct watches and standard circular face watches.
