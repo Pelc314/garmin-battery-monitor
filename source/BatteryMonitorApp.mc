@@ -5,6 +5,9 @@ import Toybox.System;
 import Toybox.Time;
 import Toybox.WatchUi;
 
+(:background :glance)
+var glanceSupported = false;
+
 (:background)
 class BatteryMonitorApp extends Application.AppBase {
 
@@ -26,14 +29,16 @@ class BatteryMonitorApp extends Application.AppBase {
 
     // Return the initial view and delegate of the application
     function getInitialView() as [WatchUi.Views] or [WatchUi.Views, WatchUi.InputDelegates] {
-        var view = new BatteryMonitorView();
-        var delegate = new BatteryMonitorDelegate(view);
+        var isPassive = !glanceSupported;
+        var view = new BatteryMonitorView(isPassive);
+        var delegate = new BatteryMonitorDelegate(view, isPassive);
         return [ view, delegate ] as [WatchUi.Views, WatchUi.InputDelegates];
     }
 
     // Return the view to show in the Glance/Widget loop
     (:glance)
     function getGlanceView() as [WatchUi.GlanceView] or [WatchUi.GlanceView, WatchUi.GlanceViewDelegate] or Null {
+        glanceSupported = true;
         return [ new BatteryMonitorGlanceView() ] as [WatchUi.GlanceView];
     }
 

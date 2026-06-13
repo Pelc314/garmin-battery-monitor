@@ -6,10 +6,12 @@ import Toybox.WatchUi;
 class BatteryMonitorDelegate extends WatchUi.BehaviorDelegate {
 
     private var _view as BatteryMonitorView;
+    private var _isPassive as Boolean;
 
-    function initialize(view as BatteryMonitorView) {
+    function initialize(view as BatteryMonitorView, isPassive as Boolean) {
         BehaviorDelegate.initialize();
         _view = view;
+        _isPassive = isPassive;
     }
 
     // Handles DOWN button press (Next Page)
@@ -28,6 +30,13 @@ class BatteryMonitorDelegate extends WatchUi.BehaviorDelegate {
 
     // Handles GPS (Enter/Select) button press
     function onSelect() as Lang.Boolean {
+        if (_isPassive) {
+            var activeView = new BatteryMonitorView(false);
+            var activeDelegate = new BatteryMonitorDelegate(activeView, false);
+            WatchUi.pushView(activeView, activeDelegate, WatchUi.SLIDE_IMMEDIATE);
+            return true;
+        }
+
         _view.onSelectKey();
         WatchUi.requestUpdate();
         
