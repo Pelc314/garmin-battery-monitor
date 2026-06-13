@@ -19,7 +19,6 @@ class BatteryMonitorGlanceView extends WatchUi.GlanceView {
         dc.setColor(Graphics.COLOR_WHITE, Graphics.COLOR_BLACK);
         dc.clear();
 
-        var width = dc.getWidth();
         var height = dc.getHeight();
 
         var stats = System.getSystemStats();

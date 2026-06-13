@@ -13,9 +13,11 @@ class BatteryMonitorView extends WatchUi.View {
     private var _page as Number = 0;             // 0 = Battery Stats, 1 = Charging Stats, 2 = Graph Page
     private var _graphDuration as Number = 0;    // 0 = 24h, 1 = 7d, 2 = 20d
     private var _showResetConfirm as Boolean = false;
+    private var _isPassive as Boolean = false;
 
-    function initialize() {
+    function initialize(isPassive as Boolean) {
         View.initialize();
+        _isPassive = isPassive;
         BatteryLogger.logCurrentState();
     }
 
@@ -253,9 +255,11 @@ class BatteryMonitorView extends WatchUi.View {
         }
         dc.drawText(leftCenter, yEst, Graphics.FONT_XTINY, estStr, Graphics.TEXT_JUSTIFY_CENTER | Graphics.TEXT_JUSTIFY_VCENTER);
 
-        // Drain Rate
+        // Drain Rate / Interaction Prompt
         var drainStr = "Drain: --";
-        if (avgDrainRate > 0.0) {
+        if (_isPassive) {
+            drainStr = isInstinct ? "Press GPS" : "Tap to open";
+        } else if (avgDrainRate > 0.0) {
             drainStr = "Drain: -" + avgDrainRate.format("%.2f") + "%/h";
         }
         dc.drawText(leftCenter, yDrain, Graphics.FONT_XTINY, drainStr, Graphics.TEXT_JUSTIFY_CENTER | Graphics.TEXT_JUSTIFY_VCENTER);
@@ -286,12 +290,12 @@ class BatteryMonitorView extends WatchUi.View {
         }
 
         // Title split into two lines
-        dc.drawText(leftCenter, yTitle1, Graphics.FONT_XTINY, "TODAY'S", Graphics.TEXT_JUSTIFY_CENTER | Graphics.TEXT_JUSTIFY_VCENTER);
+        dc.drawText(leftCenter, yTitle1, Graphics.FONT_XTINY, "LAST 24h", Graphics.TEXT_JUSTIFY_CENTER | Graphics.TEXT_JUSTIFY_VCENTER);
         dc.drawText(leftCenter, yTitle2, Graphics.FONT_XTINY, "CHARGE", Graphics.TEXT_JUSTIFY_CENTER | Graphics.TEXT_JUSTIFY_VCENTER);
 
         // Check solar hardware capability dynamically
         var stats = System.getSystemStats();
-        var hasSolar = (stats has :solarIntensity);
+        var hasSolar = (stats has :solarIntensity && stats.solarIntensity != null);
 
         if (hasSolar) {
             // AC Gained
@@ -317,18 +321,15 @@ class BatteryMonitorView extends WatchUi.View {
 
     // Page 2: History Graph
     private function drawGraphPage(dc as Dc, timestamps as Array<Number>?, batteryLevels as Array<Number>?, chargingStates as Array<Number>?, size as Number) as Void {
-        var pointsToDraw = 24;
         var durationLabel = "24h";
         var windowSecs = 24 * 3600;
         var thresholdMsg = "Need 2 data points";
         
         if (_graphDuration == 1) {
-            pointsToDraw = 168; // 7 days
             durationLabel = "7d";
             windowSecs = 168 * 3600;
             thresholdMsg = "Need 12h of history";
         } else if (_graphDuration == 2) {
-            pointsToDraw = 960; // 20 days (480 hours)
             durationLabel = "20d";
             windowSecs = 20 * 24 * 3600;
             thresholdMsg = "Need 7d of history";

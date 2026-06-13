@@ -15,28 +15,46 @@ The widget's layout adapts dynamically based on whether the target watch feature
     *   **Instinct 2S / Solar / Dual Power** (device ID: `instinct2s`, resolution: `156x156`)
     *   **Instinct Esports 45mm** (device ID: `instincte45mm`, resolution: `176x176`)
 *   **Garmin Circular Watches** (uses centered round layouts):
+    *   **Venu 2** (device ID: `venu2`, resolution: `416x416`)
     *   **Vívoactive 4** (device ID: `vivoactive4`, resolution: `260x260`)
 
 ---
 
 ## Controls
 
-*   **DOWN Button**: Scrolls to Page 2 (History Graph).
+### Button-Only Watches (e.g. Instinct Series)
+*   **DOWN Button**: Scrolls to Page 3 (History Graph).
   <img width="382" height="507" alt="image" src="https://github.com/user-attachments/assets/f866efff-66c8-45c4-914a-22905f3cbad3" />
 
-*   **UP Button**: Scrolls to Page 1 (Statistics).
+*   **UP Button**: Scrolls to Page 1 (Statistics) and Page 2 (Charging info).
+  <img width="380" height="504" alt="image" src="https://github.com/user-attachments/assets/98e28306-324e-4c82-b966-0ddc9006b44d" /> <img width="378" height="503" alt="image" src="https://github.com/user-attachments/assets/438b31c2-d2ec-4445-9a20-44eda6218c38" />
 
-<img width="380" height="504" alt="image" src="https://github.com/user-attachments/assets/98e28306-324e-4c82-b966-0ddc9006b44d" /> <img width="378" height="503" alt="image" src="https://github.com/user-attachments/assets/438b31c2-d2ec-4445-9a20-44eda6218c38" />
-
-
+*   **GPS (Enter) Button**:
+    - *On Stats Page (Page 1):* Triggers an immediate manual battery log.
+    - *On Graph Page (Page 3):* Cycles the graph duration between **24 Hours**, **7 Days**, and **20 Days**.
+*   **Hold UP (MENU) Button**: Opens the **Reset Logs** screen. Press **GPS** to confirm reset or **BACK** to cancel.
 *   **BACK Button**:
-    - *On Graph Page:* Navigates back to Page 1 (Statistics).
+    - *On Graph Page / Charging Page:* Navigates back to the Stats Page.
     - *On Reset Confirmation:* Cancels reset and returns to your previous page.
     - *On Stats Page:* Exits the widget.
-*   **GPS (Enter) Button**:
-    - *On Stats Page:* Triggers an immediate manual battery log.
-    - *On Graph Page:* Cycles the graph duration between **24 Hours**, **7 Days**, and **20 Days**.
-*   **Hold UP (MENU) Button**: Opens the **Reset Logs** screen. Press **GPS** to confirm reset or **BACK** to cancel.
+
+### Touchscreen Watches with Glance (e.g. Venu 2)
+*   **Swipe UP / Swipe DOWN**: Scroll between Page 1 (Statistics), Page 2 (Charging info), and Page 3 (History Graph).
+*   **Screen Tap**:
+    - *On Stats Page (Page 1):* Triggers an immediate manual battery log.
+    - *On Graph Page (Page 3):* Cycles the graph duration between **24 Hours**, **7 Days**, and **20 Days**.
+*   **Long Press Screen / Action Button**: Opens the **Reset Logs** screen. Tap the screen to confirm reset or press the Back physical button to cancel.
+*   **Swipe Left-to-Right (or physical Back Button)**: Goes back a page, cancels reset, or exits the widget.
+
+### Touchscreen Watches without Glance (e.g. Vívoactive 4)
+*   **Activate Widget**: When scrolling the widget loop, the widget starts in a **passive state** displaying `"Tap to open"` at the bottom. **Tap the screen once** (or press the top-right Action button) to activate it and enable swipe controls.
+*   **Swipe UP / Swipe DOWN**: Once active, swipe up or down to scroll between pages.
+*   **Screen Tap**:
+    - *On Stats Page (Page 1):* Triggers an immediate manual battery log.
+    - *On Graph Page (Page 3):* Cycles the graph duration between **24 Hours**, **7 Days**, and **20 Days**.
+*   **Long Press physical Back button**: Opens the **Reset Logs** screen. Tap the screen to confirm reset or press Back to cancel.
+*   **Swipe Left-to-Right (or physical Back Button)**: Exits the active state back to the passive widget loop. Swiping up/down on the passive loop will then scroll to other widgets.
+
 *   **Glance View**:
 
 <img width="377" height="502" alt="image" src="https://github.com/user-attachments/assets/eba2e9ba-4c71-4b7b-8fe7-8dd6a9bb6fc4" />
