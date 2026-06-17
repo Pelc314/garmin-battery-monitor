@@ -15,10 +15,25 @@ class BatteryMonitorView extends WatchUi.View {
     private var _showResetConfirm as Boolean = false;
     private var _isPassive as Boolean = false;
 
+    // Cached history arrays
+    private var _timestamps as Array<Number>?;
+    private var _batteryLevels as Array<Number>?;
+    private var _chargingStates as Array<Number>?;
+    private var _solarIntensities as Array<Number>?;
+    private var _size as Number = 0;
+
+    // Cached statistics
+    private var _avgDrainRate as Float = 0.0;
+    private var _acGainedToday as Float = 0.0;
+    private var _solarGainedToday as Float = 0.0;
+    private var _solarIntensityAvgToday as Float = 0.0;
+    private var _solarHoursToday as Float = 0.0;
+
     function initialize(isPassive as Boolean) {
         View.initialize();
         _isPassive = isPassive;
         BatteryLogger.logCurrentState();
+        calculateAnalytics();
     }
 
     function onLayout(dc as Dc) as Void {
@@ -41,84 +56,10 @@ class BatteryMonitorView extends WatchUi.View {
             solar = stats.solarIntensity;
         }
 
-        // 2. Fetch history and run analytics
-        var timestamps = Storage.getValue("timestamps") as Array<Number>?;
-        var batteryLevels = Storage.getValue("batteryLevels") as Array<Number>?;
-        var chargingStates = Storage.getValue("chargingStates") as Array<Number>?;
-        var solarIntensities = Storage.getValue("solarIntensities") as Array<Number>?;
-        
-        var size = (timestamps != null) ? timestamps.size() : 0;
-        
-        var avgDrainRate = 0.0;
+        // Calculate dynamic estimate based on current battery level and average drain rate
         var estDays = 0.0;
-        var acGainedToday = 0.0;
-        var solarGainedToday = 0.0;
-        var solarIntensityAvgToday = 0.0;
-        var solarHoursToday = 0.0;
-        
-        if (size >= 2 && timestamps != null && batteryLevels != null && chargingStates != null && solarIntensities != null) {
-            var totalHours = 0.0;
-            var totalDrop = 0.0;
-            var now = Time.now().value();
-            
-            var solarCountToday = 0;
-            var solarSumToday = 0;
-            
-            for (var i = 1; i < size; i++) {
-                var dt = (timestamps[i] - timestamps[i-1]) / 3600.0; // Hours
-                var batDiff = (batteryLevels[i-1] - batteryLevels[i]) / 10.0; // % drop
-                
-                // Average drain rate during non-charging periods
-                if (chargingStates[i] == 0 && chargingStates[i-1] == 0 && dt > 0.0 && dt < 48.0) {
-                    if (batDiff >= 0.0) {
-                        totalDrop += batDiff;
-                        totalHours += dt;
-                    }
-                }
-                
-                // Daily accumulator (last 24 hours)
-                if (now - timestamps[i] <= 86400) {
-                    var gain = -batDiff; // Positive if battery increased
-                    if (gain > 0.0) {
-                        if (chargingStates[i] == 1 || chargingStates[i-1] == 1) {
-                            acGainedToday += gain;
-                        } else {
-                            // If we missed the charging state transition (e.g. charged in-between logs),
-                            // distinguish AC charging from Solar charging based on the gain rate.
-                            // Solar charging on Instinct 2 Solar is slow (max ~1.5% - 2.0% per hour under peak sun).
-                            // If the gain rate exceeds 2.5% per hour, or solar intensity is 0, attribute it to AC.
-                            var gainRatePerHour = dt > 0.0 ? (gain / dt) : 0.0;
-                            if (solarIntensities[i] == 0 || gainRatePerHour > 2.5) {
-                                acGainedToday += gain;
-                            } else if (solarIntensities[i] > 0) {
-                                solarGainedToday += gain;
-                            }
-                        }
-                    }
-                    
-                    if (solarIntensities[i] > 0) {
-                        solarCountToday++;
-                        solarSumToday += solarIntensities[i];
-                        solarHoursToday += dt;
-                    }
-                }
-            }
-            
-            if (totalHours > 0.0) {
-                avgDrainRate = totalDrop / totalHours; // % per hour
-            }
-            
-            if (avgDrainRate > 0.001) {
-                var estHours = battery / avgDrainRate;
-                estDays = estHours / 24.0;
-                Storage.setValue("est_days", estDays);
-            } else {
-                Storage.setValue("est_days", null);
-            }
-            
-            if (solarCountToday > 0) {
-                solarIntensityAvgToday = solarSumToday.toFloat() / solarCountToday.toFloat();
-            }
+        if (_avgDrainRate > 0.001) {
+            estDays = battery / _avgDrainRate / 24.0;
         }
 
         // 3. Draw Instinct 2 Sub-Window Widget (Dynamic placement via getSubscreen)
@@ -184,13 +125,90 @@ class BatteryMonitorView extends WatchUi.View {
             drawResetConfirm(dc);
         } else {
             if (_page == 0) {
-                drawStatsPage(dc, battery, estDays, avgDrainRate);
+                drawStatsPage(dc, battery, estDays, _avgDrainRate);
             } else if (_page == 1) {
-                drawChargingPage(dc, acGainedToday, solarGainedToday, solarHoursToday, solarIntensityAvgToday);
+                drawChargingPage(dc, _acGainedToday, _solarGainedToday, _solarHoursToday, _solarIntensityAvgToday);
             } else {
-                drawGraphPage(dc, timestamps, batteryLevels, chargingStates, size);
+                drawGraphPage(dc, _timestamps, _batteryLevels, _chargingStates, _size);
             }
             drawPageIndicator(dc);
+        }
+    }
+
+    private function calculateAnalytics() as Void {
+        _timestamps = Storage.getValue("timestamps") as Array<Number>?;
+        _batteryLevels = Storage.getValue("batteryLevels") as Array<Number>?;
+        _chargingStates = Storage.getValue("chargingStates") as Array<Number>?;
+        _solarIntensities = Storage.getValue("solarIntensities") as Array<Number>?;
+        
+        _size = (_timestamps != null) ? _timestamps.size() : 0;
+        
+        _avgDrainRate = 0.0;
+        _acGainedToday = 0.0;
+        _solarGainedToday = 0.0;
+        _solarIntensityAvgToday = 0.0;
+        _solarHoursToday = 0.0;
+        
+        if (_size >= 2 && _timestamps != null && _batteryLevels != null && _chargingStates != null && _solarIntensities != null) {
+            var totalHours = 0.0;
+            var totalDrop = 0.0;
+            var now = Time.now().value();
+            
+            var solarCountToday = 0;
+            var solarSumToday = 0;
+            
+            for (var i = 1; i < _size; i++) {
+                var dt = (_timestamps[i] - _timestamps[i-1]) / 3600.0; // Hours
+                var batDiff = (_batteryLevels[i-1] - _batteryLevels[i]) / 10.0; // % drop
+                
+                // Average drain rate during non-charging periods
+                if (_chargingStates[i] == 0 && _chargingStates[i-1] == 0 && dt > 0.0 && dt < 48.0) {
+                    if (batDiff >= 0.0) {
+                        totalDrop += batDiff;
+                        totalHours += dt;
+                    }
+                }
+                
+                // Daily accumulator (last 24 hours)
+                if (now - _timestamps[i] <= 86400) {
+                    var gain = -batDiff; // Positive if battery increased
+                    if (gain > 0.0) {
+                        if (_chargingStates[i] == 1 || _chargingStates[i-1] == 1) {
+                            _acGainedToday += gain;
+                        } else {
+                            var gainRatePerHour = dt > 0.0 ? (gain / dt) : 0.0;
+                            if (_solarIntensities[i] == 0 || gainRatePerHour > 2.5) {
+                                _acGainedToday += gain;
+                            } else if (_solarIntensities[i] > 0) {
+                                _solarGainedToday += gain;
+                            }
+                        }
+                    }
+                    
+                    if (_solarIntensities[i] > 0) {
+                        solarCountToday++;
+                        solarSumToday += _solarIntensities[i];
+                        _solarHoursToday += dt;
+                    }
+                }
+            }
+            
+            if (totalHours > 0.0) {
+                _avgDrainRate = totalDrop / totalHours; // % per hour
+            }
+            
+            var stats = System.getSystemStats();
+            var battery = stats.battery;
+            if (_avgDrainRate > 0.001) {
+                var estHours = battery / _avgDrainRate;
+                Storage.setValue("est_days", estHours / 24.0);
+            } else {
+                Storage.setValue("est_days", null);
+            }
+            
+            if (solarCountToday > 0) {
+                _solarIntensityAvgToday = solarSumToday.toFloat() / solarCountToday.toFloat();
+            }
         }
     }
 
@@ -640,6 +658,17 @@ class BatteryMonitorView extends WatchUi.View {
             Storage.deleteValue("est_days");
             _showResetConfirm = false;
             
+            _timestamps = null;
+            _batteryLevels = null;
+            _chargingStates = null;
+            _solarIntensities = null;
+            _size = 0;
+            _avgDrainRate = 0.0;
+            _acGainedToday = 0.0;
+            _solarGainedToday = 0.0;
+            _solarIntensityAvgToday = 0.0;
+            _solarHoursToday = 0.0;
+            
             if (Attention has :playTone) {
                 Attention.playTone(Attention.TONE_RESET);
             }
@@ -658,6 +687,7 @@ class BatteryMonitorView extends WatchUi.View {
     // Manual data logger invocation
     function triggerManualLog() as Void {
         BatteryLogger.logCurrentState();
+        calculateAnalytics();
     }
 
     private function hasSubscreen() as Lang.Boolean {

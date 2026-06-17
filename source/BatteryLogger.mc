@@ -69,5 +69,33 @@ module BatteryLogger {
         Storage.setValue("batteryLevels", batteryLevels);
         Storage.setValue("chargingStates", chargingStates);
         Storage.setValue("solarIntensities", solarIntensities);
+
+        // 6. Update battery life estimate in Storage
+        var totalHours = 0.0;
+        var totalDrop = 0.0;
+        var size = timestamps.size();
+        for (var i = 1; i < size; i++) {
+            var dt = (timestamps[i] - timestamps[i-1]) / 3600.0;
+            var batDiff = (batteryLevels[i-1] - batteryLevels[i]) / 10.0;
+
+            if (chargingStates[i] == 0 && chargingStates[i-1] == 0 && dt > 0.0 && dt < 48.0) {
+                if (batDiff >= 0.0) {
+                    totalDrop += batDiff;
+                    totalHours += dt;
+                }
+            }
+        }
+
+        if (totalHours > 0.1 && totalDrop >= 0.0) {
+            var avgDrainRate = totalDrop / totalHours;
+            if (avgDrainRate > 0.001) {
+                var estHours = battery / avgDrainRate;
+                Storage.setValue("est_days", estHours / 24.0);
+            } else {
+                Storage.setValue("est_days", null);
+            }
+        } else {
+            Storage.setValue("est_days", null);
+        }
     }
 }
