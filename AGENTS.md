@@ -35,11 +35,18 @@ Garmin watch hardware has very limited CPU power, slow storage access, and lacks
 
 ### 3. Glance Memory Limits (32KB RAM)
 * **Rule**: Never load large history arrays or execute logger/analytics loops in the Glance View's `onUpdate()`. Doing so will trigger Out Of Memory (OOM) or Watchdog crashes.
-* **Workaround**: The background logger pre-calculates the estimate and writes it to a single float key (`"est_days"`). The glance view should read *only* this float directly from `Storage`.
+* **Workaround**: The glance view should read *only* the cached float `"avg_drain_rate"` from `Storage` and calculate the estimate dynamically on the fly using `battery / avgDrainRate / 24.0`, requiring zero history array loading.
 
 ### 4. Graph Rendering Optimization
 * **Rule**: Never recalculate pixel coordinates or date formats for 960 entries on every single `onUpdate()` frame redraw.
 * **Workaround**: Implement **lazy caching** of coordinates. Calculate the bounding box, Y-axis labels, and screen coordinates (`x`, `y`) only when the user cycles the graph duration or enters the graph page. Cache these in member variables, and draw directly from cache on subsequent frames.
+
+### 5. Background Process Memory Limits & Pending Queue
+* **Rule**: The background service process runs under a strict **32KB RAM limit**. Attempting to load the four main history arrays (up to 960 elements each) inside the background service will instantly cause an **Out Of Memory (OOM)** crash.
+* **Workaround**: Use the **Pending Queue Architecture**.
+  * The background service MUST write new points only to lightweight pending queue arrays in Storage (`"p_timestamps"`, `"p_batteryLevels"`, `"p_chargingStates"`, `"p_solarIntensities"`), which are capped at 48 entries (24 hours) and consume $<1\text{KB}$ of RAM.
+  * The background service MUST NOT load the main history arrays or run stats/analytics calculations.
+  * The main app process (Active View) MUST load, merge, and clear the pending logs on startup (`BatteryLogger.mergePendingLogs()`), as it runs in the main process thread (96KB RAM) and can safely process the merge.
 
 ---
 
