@@ -6,15 +6,181 @@ import Toybox.Time;
 (:glance :background)
 module BatteryLogger {
 
-    // Logs the current watch state (battery %, charging state, solar intensity).
-    // Restricts writes to at most once per 5 minutes to prevent storage spam.
-    function logCurrentState() as Void {
+    // Lightweight background logger to prevent OOM errors (restricted to 32KB RAM)
+    function logCurrentStateBackground() as Void {
         var now = Time.now().value();
         var stats = System.getSystemStats();
         
-        // 1. Collect current metrics
         var battery = stats.battery;
-        var isCharging = stats.charging ? 1 : 0; // 1 = AC charging, 0 = discharging
+        var isCharging = stats.charging ? 1 : 0;
+        
+        var solar = 0;
+        if (stats has :solarIntensity && stats.solarIntensity != null) {
+            solar = stats.solarIntensity;
+        }
+
+        // Load pending logs from Storage (max 48 entries, very small footprint)
+        var pTimestamps = Storage.getValue("p_timestamps") as Array<Number>?;
+        var pBatteryLevels = Storage.getValue("p_batteryLevels") as Array<Number>?;
+        var pChargingStates = Storage.getValue("p_chargingStates") as Array<Number>?;
+        var pSolarIntensities = Storage.getValue("p_solarIntensities") as Array<Number>?;
+
+        if (pTimestamps == null) { pTimestamps = [] as Array<Number>; }
+        if (pBatteryLevels == null) { pBatteryLevels = [] as Array<Number>; }
+        if (pChargingStates == null) { pChargingStates = [] as Array<Number>; }
+        if (pSolarIntensities == null) { pSolarIntensities = [] as Array<Number>; }
+
+        // Align pending arrays if mismatched
+        var maxSize = pTimestamps.size();
+        if (pBatteryLevels.size() > maxSize) { maxSize = pBatteryLevels.size(); }
+        if (pChargingStates.size() > maxSize) { maxSize = pChargingStates.size(); }
+        if (pSolarIntensities.size() > maxSize) { maxSize = pSolarIntensities.size(); }
+
+        while (pTimestamps.size() < maxSize) { pTimestamps.add(now); }
+        while (pBatteryLevels.size() < maxSize) {
+            var lastBat = pBatteryLevels.size() > 0 ? pBatteryLevels[pBatteryLevels.size() - 1] : (battery * 10.0).toNumber();
+            pBatteryLevels.add(lastBat);
+        }
+        while (pChargingStates.size() < maxSize) { pChargingStates.add(0); }
+        while (pSolarIntensities.size() < maxSize) { pSolarIntensities.add(0); }
+
+        // Prevent duplicate logs within the 5-minute interval
+        var shouldAppend = true;
+        if (pTimestamps.size() > 0) {
+            var lastTime = pTimestamps[pTimestamps.size() - 1];
+            if (now - lastTime < 300) {
+                shouldAppend = false;
+                pTimestamps[pTimestamps.size() - 1] = now;
+                pBatteryLevels[pBatteryLevels.size() - 1] = (battery * 10.0).toNumber();
+                pChargingStates[pChargingStates.size() - 1] = isCharging;
+                pSolarIntensities[pSolarIntensities.size() - 1] = solar;
+            }
+        }
+
+        if (shouldAppend) {
+            pTimestamps.add(now);
+            pBatteryLevels.add((battery * 10.0).toNumber());
+            pChargingStates.add(isCharging);
+            pSolarIntensities.add(solar);
+
+            // Cap the pending queue size (48 entries = 24 hours of logs)
+            // Keeps memory under 1KB to completely prevent OOM in background process
+            if (pTimestamps.size() > 48) {
+                pTimestamps = pTimestamps.slice(1, null);
+                pBatteryLevels = pBatteryLevels.slice(1, null);
+                pChargingStates = pChargingStates.slice(1, null);
+                pSolarIntensities = pSolarIntensities.slice(1, null);
+            }
+        }
+
+        Storage.setValue("p_timestamps", pTimestamps);
+        Storage.setValue("p_batteryLevels", pBatteryLevels);
+        Storage.setValue("p_chargingStates", pChargingStates);
+        Storage.setValue("p_solarIntensities", pSolarIntensities);
+    }
+
+    // Merges background pending logs into main history arrays.
+    // Must be called from the main application thread (which has a larger memory limit).
+    function mergePendingLogs() as Void {
+        var pTimestamps = Storage.getValue("p_timestamps") as Array<Number>?;
+        if (pTimestamps == null || pTimestamps.size() == 0) {
+            return;
+        }
+
+        var pBatteryLevels = Storage.getValue("p_batteryLevels") as Array<Number>?;
+        var pChargingStates = Storage.getValue("p_chargingStates") as Array<Number>?;
+        var pSolarIntensities = Storage.getValue("p_solarIntensities") as Array<Number>?;
+
+        if (pBatteryLevels == null) { pBatteryLevels = [] as Array<Number>; }
+        if (pChargingStates == null) { pChargingStates = [] as Array<Number>; }
+        if (pSolarIntensities == null) { pSolarIntensities = [] as Array<Number>; }
+
+        var timestamps = Storage.getValue("timestamps") as Array<Number>?;
+        var batteryLevels = Storage.getValue("batteryLevels") as Array<Number>?;
+        var chargingStates = Storage.getValue("chargingStates") as Array<Number>?;
+        var solarIntensities = Storage.getValue("solarIntensities") as Array<Number>?;
+
+        if (timestamps == null) { timestamps = [] as Array<Number>; }
+        if (batteryLevels == null) { batteryLevels = [] as Array<Number>; }
+        if (chargingStates == null) { chargingStates = [] as Array<Number>; }
+        if (solarIntensities == null) { solarIntensities = [] as Array<Number>; }
+
+        // Align main arrays if mismatched
+        var maxSize = timestamps.size();
+        if (batteryLevels.size() > maxSize) { maxSize = batteryLevels.size(); }
+        if (chargingStates.size() > maxSize) { maxSize = chargingStates.size(); }
+        if (solarIntensities.size() > maxSize) { maxSize = solarIntensities.size(); }
+
+        var now = Time.now().value();
+        while (timestamps.size() < maxSize) { timestamps.add(now); }
+        while (batteryLevels.size() < maxSize) {
+            var lastBat = batteryLevels.size() > 0 ? batteryLevels[batteryLevels.size() - 1] : 1000;
+            batteryLevels.add(lastBat);
+        }
+        while (chargingStates.size() < maxSize) { chargingStates.add(0); }
+        while (solarIntensities.size() < maxSize) { solarIntensities.add(0); }
+
+        // Merge pending logs into main logs
+        var pSize = pTimestamps.size();
+        for (var i = 0; i < pSize; i++) {
+            var pTime = pTimestamps[i];
+            var exists = false;
+            var tSize = timestamps.size();
+            
+            if (tSize > 0) {
+                var lastTime = timestamps[tSize - 1];
+                if (pTime - lastTime < 300) {
+                    timestamps[tSize - 1] = pTime;
+                    batteryLevels[tSize - 1] = pBatteryLevels[i];
+                    chargingStates[tSize - 1] = pChargingStates[i];
+                    solarIntensities[tSize - 1] = pSolarIntensities[i];
+                    exists = true;
+                }
+            }
+
+            if (!exists) {
+                timestamps.add(pTime);
+                batteryLevels.add(pBatteryLevels[i]);
+                chargingStates.add(pChargingStates[i]);
+                solarIntensities.add(pSolarIntensities[i]);
+            }
+        }
+
+        // Maintain rolling 20-day history cap (960 entries)
+        if (timestamps.size() > 960) {
+            var diff = timestamps.size() - 960;
+            timestamps = timestamps.slice(diff, null);
+            batteryLevels = batteryLevels.slice(diff, null);
+            chargingStates = chargingStates.slice(diff, null);
+            solarIntensities = solarIntensities.slice(diff, null);
+        }
+
+        // Save back main logs
+        Storage.setValue("timestamps", timestamps);
+        Storage.setValue("batteryLevels", batteryLevels);
+        Storage.setValue("chargingStates", chargingStates);
+        Storage.setValue("solarIntensities", solarIntensities);
+
+        // Delete pending keys
+        Storage.deleteValue("p_timestamps");
+        Storage.deleteValue("p_batteryLevels");
+        Storage.deleteValue("p_chargingStates");
+        Storage.deleteValue("p_solarIntensities");
+
+        // Recalculate statistics and save estimates/averages
+        calculateAndSaveAnalytics(timestamps, batteryLevels, chargingStates, solarIntensities);
+    }
+
+    // Logs the current watch state (battery %, charging state, solar intensity) manually
+    // from the Active View (main app).
+    function logCurrentState() as Void {
+        // 1. First merge any pending logs recorded by the background service
+        mergePendingLogs();
+
+        var now = Time.now().value();
+        var stats = System.getSystemStats();
+        var battery = stats.battery;
+        var isCharging = stats.charging ? 1 : 0;
         
         var solar = 0;
         if (stats has :solarIntensity && stats.solarIntensity != null) {
@@ -27,37 +193,29 @@ module BatteryLogger {
         var chargingStates = Storage.getValue("chargingStates") as Array<Number>?;
         var solarIntensities = Storage.getValue("solarIntensities") as Array<Number>?;
 
-        // Initialize if empty
         if (timestamps == null) { timestamps = [] as Array<Number>; }
         if (batteryLevels == null) { batteryLevels = [] as Array<Number>; }
         if (chargingStates == null) { chargingStates = [] as Array<Number>; }
         if (solarIntensities == null) { solarIntensities = [] as Array<Number>; }
 
-        // Ensure all arrays have the exact same size by padding shorter ones (prevents Out of Bounds crashes while preserving history)
+        // Align arrays
         var maxSize = timestamps.size();
         if (batteryLevels.size() > maxSize) { maxSize = batteryLevels.size(); }
         if (chargingStates.size() > maxSize) { maxSize = chargingStates.size(); }
         if (solarIntensities.size() > maxSize) { maxSize = solarIntensities.size(); }
 
-        while (timestamps.size() < maxSize) {
-            timestamps.add(now);
-        }
+        while (timestamps.size() < maxSize) { timestamps.add(now); }
         while (batteryLevels.size() < maxSize) {
             var lastBat = batteryLevels.size() > 0 ? batteryLevels[batteryLevels.size() - 1] : (battery * 10.0).toNumber();
             batteryLevels.add(lastBat);
         }
-        while (chargingStates.size() < maxSize) {
-            chargingStates.add(0);
-        }
-        while (solarIntensities.size() < maxSize) {
-            solarIntensities.add(0);
-        }
+        while (chargingStates.size() < maxSize) { chargingStates.add(0); }
+        while (solarIntensities.size() < maxSize) { solarIntensities.add(0); }
 
-        // 3. Prevent duplicate logs within the 5-minute interval
+        // Prevent duplicate logs within the 5-minute interval
         var shouldAppend = true;
         if (timestamps.size() > 0) {
             var lastTime = timestamps[timestamps.size() - 1];
-            // If less than 5 minutes (300 seconds) have elapsed, update the last reading in place
             if (now - lastTime < 300) {
                 shouldAppend = false;
                 timestamps[timestamps.size() - 1] = now;
@@ -67,15 +225,12 @@ module BatteryLogger {
             }
         }
 
-        // 4. Append new entry if outside the debounce window
         if (shouldAppend) {
             timestamps.add(now);
             batteryLevels.add((battery * 10.0).toNumber());
             chargingStates.add(isCharging);
             solarIntensities.add(solar);
 
-            // Maintain rolling 20-day history cap (960 entries at 30-minute intervals)
-            // Capped at 960 to prevent Out Of Memory (OOM) errors in background RAM (32KB limit on Instinct 2)
             if (timestamps.size() > 960) {
                 timestamps = timestamps.slice(1, null);
                 batteryLevels = batteryLevels.slice(1, null);
@@ -84,13 +239,17 @@ module BatteryLogger {
             }
         }
 
-        // 5. Save logs back to persistent storage
         Storage.setValue("timestamps", timestamps);
         Storage.setValue("batteryLevels", batteryLevels);
         Storage.setValue("chargingStates", chargingStates);
         Storage.setValue("solarIntensities", solarIntensities);
 
-        // 6. Update cached analytics in Storage
+        // Recalculate statistics
+        calculateAndSaveAnalytics(timestamps, batteryLevels, chargingStates, solarIntensities);
+    }
+
+    // Recalculates analytics based on arrays and updates Storage
+    function calculateAndSaveAnalytics(timestamps as Array<Number>, batteryLevels as Array<Number>, chargingStates as Array<Number>, solarIntensities as Array<Number>) as Void {
         var avgDrainRate = 0.0;
         var acGainedToday = 0.0;
         var solarGainedToday = 0.0;
@@ -152,6 +311,8 @@ module BatteryLogger {
                 avgDrainRate = (totalDropTenths.toFloat() * 360.0) / totalSeconds.toFloat();
             }
             
+            var stats = System.getSystemStats();
+            var battery = stats.battery;
             if (avgDrainRate > 0.001) {
                 var estHours = battery / avgDrainRate;
                 estDays = estHours / 24.0;

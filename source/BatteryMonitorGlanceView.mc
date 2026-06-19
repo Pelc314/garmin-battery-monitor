@@ -21,8 +21,12 @@ class BatteryMonitorGlanceView extends WatchUi.GlanceView {
         var stats = System.getSystemStats();
         var battery = stats.battery;
 
-        // Retrieve pre-calculated estimate from Storage (calculated by background service/active view)
-        var estDaysVal = Storage.getValue("est_days") as Float?;
+        // Dynamically calculate estimate based on current battery and cached avg_drain_rate
+        var avgDrainRate = Storage.getValue("avg_drain_rate") as Float?;
+        var estDaysVal = null;
+        if (avgDrainRate != null && avgDrainRate > 0.001) {
+            estDaysVal = battery / avgDrainRate / 24.0;
+        }
         var estString = "";
         
         if (estDaysVal != null && estDaysVal > 0.0) {

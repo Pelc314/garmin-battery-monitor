@@ -53,7 +53,8 @@ The app stores data in persistent `Storage` under four parallel arrays:
 
 ### Database Mismatches & Upgrades
 * **Rule**: When upgrading the app, new fields (like `solarIntensities`) might be missing from older stored logs, causing array size mismatches and Out of Bounds crashes.
-* **Workaround**: Use the **History-Preserving Self-Healing Padding** mechanism. On logger load, check all arrays. Find the maximum array size, and pad the shorter arrays with default values (`0`s) to match the maximum size. **Do not slice/truncate arrays**, as that deletes the user's history.
+* **Workaround**: Use the **History-Preserving Self-Healing Padding** mechanism. On logger load, check all arrays. Find the maximum array size, and pad the shorter arrays with default values (`0`s) to match the maximum size. **Do not slice/truncate arrays**, as that deletes the user's history. 
+Remember that all database schema changes cannot affect already saved data!
 
 ---
 

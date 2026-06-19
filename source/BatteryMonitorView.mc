@@ -22,6 +22,25 @@ class BatteryMonitorView extends WatchUi.View {
     private var _solarIntensities as Array<Number>?;
     private var _size as Number = 0;
 
+    // Caching variables for lazy-evaluation graph rendering
+    private var _graphDataInvalid as Boolean = true;
+    private var _graphHasEnoughData as Boolean = false;
+    private var _curvePoints as Array< Array<Number> >?;
+    private var _labelTop as String = "100";
+    private var _labelMid as String = "50";
+    private var _labelBot as String = "0";
+    private var _xLabelLeft as String = "";
+    private var _xLabelMid as String = "";
+    private var _xLabelRight as String = "";
+    private var _thresholdMsg as String = "";
+    private var _durationLabel as String = "24h";
+    private var _gx as Number = 0;
+    private var _gy as Number = 0;
+    private var _gw as Number = 0;
+    private var _gh as Number = 0;
+    private var _titleX as Number = 0;
+    private var _titleY as Number = 0;
+
     // Cached statistics
     private var _avgDrainRate as Float = 0.0;
     private var _acGainedToday as Float = 0.0;
@@ -32,6 +51,7 @@ class BatteryMonitorView extends WatchUi.View {
     function initialize(isPassive as Boolean) {
         View.initialize();
         _isPassive = isPassive;
+        BatteryLogger.mergePendingLogs();
         loadCachedAnalytics();
     }
 
@@ -162,6 +182,7 @@ class BatteryMonitorView extends WatchUi.View {
             if (_batteryLevels != null && _batteryLevels.size() < _size) { _size = _batteryLevels.size(); }
             if (_chargingStates != null && _chargingStates.size() < _size) { _size = _chargingStates.size(); }
         }
+        _graphDataInvalid = true;
     }
 
     private function clearGraphCache() as Void {
@@ -169,6 +190,8 @@ class BatteryMonitorView extends WatchUi.View {
         _batteryLevels = null;
         _chargingStates = null;
         _size = 0;
+        _curvePoints = null;
+        _graphDataInvalid = true;
     }
 
     // Draws a thin vertical scrollbar line on the far-left edge of the screen
@@ -296,85 +319,81 @@ class BatteryMonitorView extends WatchUi.View {
         }
     }
 
-    // Page 2: History Graph
-    private function drawGraphPage(dc as Dc, timestamps as Array<Number>?, batteryLevels as Array<Number>?, chargingStates as Array<Number>?, size as Number) as Void {
-        var durationLabel = "24h";
+    private function calculateGraphData(dc as Dc) as Void {
+        _durationLabel = "24h";
         var windowSecs = 24 * 3600;
-        var thresholdMsg = "Need 2 data points";
+        _thresholdMsg = "Need 2 data points";
         
         if (_graphDuration == 1) {
-            durationLabel = "7d";
+            _durationLabel = "7d";
             windowSecs = 168 * 3600;
-            thresholdMsg = "Need 12h of history";
+            _thresholdMsg = "Need 12h of history";
         } else if (_graphDuration == 2) {
-            durationLabel = "20d";
+            _durationLabel = "20d";
             windowSecs = 20 * 24 * 3600;
-            thresholdMsg = "Need 7d of history";
+            _thresholdMsg = "Need 7d of history";
         }
 
         var width = dc.getWidth();
         var height = dc.getHeight();
         var isInstinct = hasSubscreen();
 
-        var gw = (width * 0.75).toNumber();
-        var gh = (height * 0.35).toNumber();
-        var gx = (width - gw) / 2;
-        var gy = (height * 0.38).toNumber();
+        _gw = (width * 0.75).toNumber();
+        _gh = (height * 0.35).toNumber();
+        _gx = (width - _gw) / 2;
+        _gy = (height * 0.38).toNumber();
         
-        var titleX = width / 2;
-        var titleY = (height * 0.22).toNumber();
+        _titleX = width / 2;
+        _titleY = (height * 0.22).toNumber();
 
         if (isInstinct) {
-            gx = 25;
-            gy = 74; 
-            gw = 125;
-            gh = 57; 
+            _gx = 25;
+            _gy = 74; 
+            _gw = 125;
+            _gh = 57; 
             
             if (width <= 156) {
                 // Instinct 2S screen dimensions optimization
-                gx = 20;
-                gw = 115;
-                gy = 68;
-                gh = 50;
+                _gx = 20;
+                _gw = 115;
+                _gy = 68;
+                _gh = 50;
             }
             
-            titleX = (width <= 156) ? 48 : 54;
-            titleY = (height <= 156) ? 38 : 45;
+            _titleX = (width <= 156) ? 48 : 54;
+            _titleY = (height <= 156) ? 38 : 45;
         }
-
-        // Title (centered and safe from top-left clipping)
-        dc.drawText(titleX, titleY, Graphics.FONT_XTINY, "HISTORY: " + durationLabel, Graphics.TEXT_JUSTIFY_CENTER | Graphics.TEXT_JUSTIFY_VCENTER);
 
         var now = Time.now().value();
         var windowStart = now - windowSecs;
 
         // Count how many logged points fall within this time window
-        var validStartIdx = size;
-        if (timestamps != null) {
-            for (var i = 0; i < size; i++) {
-                if (timestamps[i] >= windowStart) {
+        var validStartIdx = _size;
+        if (_timestamps != null) {
+            for (var i = 0; i < _size; i++) {
+                if (_timestamps[i] >= windowStart) {
                     validStartIdx = i;
                     break;
                 }
             }
         }
-        var validPoints = size - validStartIdx;
+        var validPoints = _size - validStartIdx;
 
-        var hasEnoughData = false;
-        if (validPoints >= 2 && batteryLevels != null && chargingStates != null && timestamps != null) {
-            var durationSpanned = timestamps[size - 1] - timestamps[validStartIdx];
+        _graphHasEnoughData = false;
+        if (validPoints >= 2 && _batteryLevels != null && _chargingStates != null && _timestamps != null) {
+            var durationSpanned = _timestamps[_size - 1] - _timestamps[validStartIdx];
             if (_graphDuration == 0) {
                 // 24h: just need at least 2 points to draw a line
-                hasEnoughData = true;
+                _graphHasEnoughData = true;
             } else if (_graphDuration == 1) {
                 // 7d: need at least 12 hours spanned
                 if (durationSpanned >= 43200) {
-                    hasEnoughData = true;
+                    _graphHasEnoughData = true;
                 }
             } else {
                 // 20d: need at least 7 days spanned
                 if (durationSpanned >= 604800) {
-                    hasEnoughData = true;
+                    _graphHasEnoughData = true;
                 }
             }
         }
@@ -382,18 +401,18 @@ class BatteryMonitorView extends WatchUi.View {
         // Calculate Y-axis range and labels (dynamic for 24h mode, 0-100% for 7d/20d)
         var minY = 0.0;
         var maxY = 100.0;
-        var labelTop = "100";
-        var labelMid = "50";
-        var labelBot = "0";
+        _labelTop = "100";
+        _labelMid = "50";
+        _labelBot = "0";
 
-        if (hasEnoughData) {
-            if (_graphDuration == 0 && batteryLevels != null) {
+        if (_graphHasEnoughData) {
+            if (_graphDuration == 0 && _batteryLevels != null) {
                 // 24h mode: calculate dynamic Y-axis range based on actual log min/max
                 var lowest = 100.0;
                 var highest = 0.0;
                 for (var i = 0; i < validPoints; i++) {
                     var idx = validStartIdx + i;
-                    var val = batteryLevels[idx] / 10.0; // Float %
+                    var val = _batteryLevels[idx] / 10.0; // Float %
                     if (val < lowest) { lowest = val; }
                     if (val > highest) { highest = val; }
                 }
@@ -411,58 +430,100 @@ class BatteryMonitorView extends WatchUi.View {
                     maxY = 100.0;
                 }
                 
-                labelTop = maxY.format("%.0f");
-                labelMid = ((minY + maxY) / 2.0).format("%.0f");
-                labelBot = minY.format("%.0f");
+                _labelTop = maxY.format("%.0f");
+                _labelMid = ((minY + maxY) / 2.0).format("%.0f");
+                _labelBot = minY.format("%.0f");
             }
         }
 
-        // Draw bounding box
-        dc.drawLine(gx, gy + gh, gx + gw, gy + gh); // X axis
-        dc.drawLine(gx, gy, gx, gy + gh);           // Y axis
-
-        // Draw Y labels
-        // Move top label 2 pixels to the right (gx - 1) to prevent left-edge squircle clipping
-        dc.drawText(gx - 1, gy, Graphics.FONT_XTINY, labelTop, Graphics.TEXT_JUSTIFY_RIGHT | Graphics.TEXT_JUSTIFY_VCENTER);
-        // Move bottom label 7 pixels up (gy + gh - 7) to prevent overlap with the X-axis tick labels below it
-        dc.drawText(gx - 3, gy + gh - 7, Graphics.FONT_XTINY, labelBot, Graphics.TEXT_JUSTIFY_RIGHT | Graphics.TEXT_JUSTIFY_VCENTER);
-        dc.drawText(gx - 3, gy + gh / 2, Graphics.FONT_XTINY, labelMid, Graphics.TEXT_JUSTIFY_RIGHT | Graphics.TEXT_JUSTIFY_VCENTER);
-
-        if (!hasEnoughData) {
-            // Display message that more data needs to be collected
-            dc.drawText(gx + gw / 2, gy + gh / 2, Graphics.FONT_XTINY, thresholdMsg, Graphics.TEXT_JUSTIFY_CENTER | Graphics.TEXT_JUSTIFY_VCENTER);
-        } else {
-            // 1. Build and fill the polygon for the area under the curve in batches
-            // Garmin's dc.fillPolygon has a limit of 64 points. We collect all unique points
-            // on the curve, then draw the shaded area in contiguous batches of at most 40 curve points.
-            var curvePoints = [] as Array< Array<Number> >;
+        // 1. Build the curve points
+        _curvePoints = [] as Array< Array<Number> >;
+        if (_graphHasEnoughData && _timestamps != null && _batteryLevels != null && _chargingStates != null) {
             var lastAddedX = -1;
-            
             for (var i = 0; i < validPoints; i++) {
                 var idx = validStartIdx + i;
-                var t = timestamps[idx];
-                var valY = batteryLevels[idx] / 10.0;
+                var t = _timestamps[idx];
+                var valY = _batteryLevels[idx] / 10.0;
                 
                 var ratio = (t - windowStart).toFloat() / windowSecs.toFloat();
                 if (ratio < 0.0) { ratio = 0.0; }
                 if (ratio > 1.0) { ratio = 1.0; }
                 
-                var x = gx + (ratio * gw).toNumber();
+                var x = _gx + (ratio * _gw).toNumber();
                 
                 // Dynamic Y mapping
                 var valRatio = (valY - minY) / (maxY - minY);
                 if (valRatio < 0.0) { valRatio = 0.0; }
                 if (valRatio > 1.0) { valRatio = 1.0; }
-                var y = gy + gh - (valRatio * gh).toNumber();
+                var y = _gy + _gh - (valRatio * _gh).toNumber();
                 
                 if (i == 0 || i == validPoints - 1 || x != lastAddedX) {
-                    curvePoints.add([x, y, chargingStates[idx]] as Array<Number>);
+                    _curvePoints.add([x, y, _chargingStates[idx]] as Array<Number>);
                     lastAddedX = x;
                 }
             }
-            
-            var cpSize = curvePoints.size();
-            if (cpSize >= 2) {
+        }
+
+        // Calculate X-axis ticks and labels
+        _xLabelLeft = "";
+        _xLabelMid = "";
+        _xLabelRight = "";
+        
+        if (_graphHasEnoughData) {
+            if (_graphDuration == 0) {
+                // 24h: show hour of the day (e.g. 14h)
+                var infoLeft = Gregorian.info(new Time.Moment(windowStart), Time.FORMAT_SHORT);
+                var infoMid = Gregorian.info(new Time.Moment(windowStart + 43200), Time.FORMAT_SHORT);
+                var infoRight = Gregorian.info(new Time.Moment(now), Time.FORMAT_SHORT);
+                
+                _xLabelLeft = infoLeft.hour.format("%02d") + "h";
+                _xLabelMid = infoMid.hour.format("%02d") + "h";
+                _xLabelRight = infoRight.hour.format("%02d") + "h";
+            } else if (_graphDuration == 1) {
+                // 7d: show day names (Mon, Wed, Fri)
+                var days = ["", "Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+                var infoLeft = Gregorian.info(new Time.Moment(windowStart), Time.FORMAT_SHORT);
+                var infoMid = Gregorian.info(new Time.Moment(windowStart + 302400), Time.FORMAT_SHORT); // 3.5 days = 302400 seconds
+                var infoRight = Gregorian.info(new Time.Moment(now), Time.FORMAT_SHORT);
+                
+                _xLabelLeft = days[infoLeft.day_of_week];
+                _xLabelMid = days[infoMid.day_of_week];
+                _xLabelRight = days[infoRight.day_of_week];
+            } else {
+                // 20d: show relative day marks D1, D10, D20
+                _xLabelLeft = "D1";
+                _xLabelMid = "D10";
+                _xLabelRight = "D20";
+            }
+        }
+    }
+
+    // Page 2: History Graph
+    private function drawGraphPage(dc as Dc, timestamps as Array<Number>?, batteryLevels as Array<Number>?, chargingStates as Array<Number>?, size as Number) as Void {
+        if (_graphDataInvalid) {
+            calculateGraphData(dc);
+            _graphDataInvalid = false;
+        }
+
+        // Title (centered and safe from top-left clipping)
+        dc.drawText(_titleX, _titleY, Graphics.FONT_XTINY, "HISTORY: " + _durationLabel, Graphics.TEXT_JUSTIFY_CENTER | Graphics.TEXT_JUSTIFY_VCENTER);
+
+        // Draw bounding box
+        dc.drawLine(_gx, _gy + _gh, _gx + _gw, _gy + _gh); // X axis
+        dc.drawLine(_gx, _gy, _gx, _gy + _gh);           // Y axis
+
+        // Draw Y labels
+        dc.drawText(_gx - 1, _gy, Graphics.FONT_XTINY, _labelTop, Graphics.TEXT_JUSTIFY_RIGHT | Graphics.TEXT_JUSTIFY_VCENTER);
+        dc.drawText(_gx - 3, _gy + _gh - 7, Graphics.FONT_XTINY, _labelBot, Graphics.TEXT_JUSTIFY_RIGHT | Graphics.TEXT_JUSTIFY_VCENTER);
+        dc.drawText(_gx - 3, _gy + _gh / 2, Graphics.FONT_XTINY, _labelMid, Graphics.TEXT_JUSTIFY_RIGHT | Graphics.TEXT_JUSTIFY_VCENTER);
+
+        if (!_graphHasEnoughData) {
+            // Display message that more data needs to be collected
+            dc.drawText(_gx + _gw / 2, _gy + _gh / 2, Graphics.FONT_XTINY, _thresholdMsg, Graphics.TEXT_JUSTIFY_CENTER | Graphics.TEXT_JUSTIFY_VCENTER);
+        } else {
+            // 1. Build and fill the polygon for the area under the curve in batches
+            var cpSize = _curvePoints != null ? _curvePoints.size() : 0;
+            if (cpSize >= 2 && _curvePoints != null) {
                 dc.setColor(Graphics.COLOR_LT_GRAY, Graphics.COLOR_BLACK);
                 var batchSize = 40; // Under 64 point limit
                 var startIdx = 0;
@@ -475,15 +536,15 @@ class BatteryMonitorView extends WatchUi.View {
                     var poly = [] as Array< Array<Number> >;
                     
                     // Bottom-left anchor for this batch
-                    poly.add([curvePoints[startIdx][0], gy + gh] as Array<Number>);
+                    poly.add([_curvePoints[startIdx][0], _gy + _gh] as Array<Number>);
                     
                     // Add curve points for this batch
                     for (var j = startIdx; j <= endIdx; j++) {
-                        poly.add([curvePoints[j][0], curvePoints[j][1]] as Array<Number>);
+                        poly.add([_curvePoints[j][0], _curvePoints[j][1]] as Array<Number>);
                     }
                     
                     // Bottom-right anchor for this batch
-                    poly.add([curvePoints[endIdx][0], gy + gh] as Array<Number>);
+                    poly.add([_curvePoints[endIdx][0], _gy + _gh] as Array<Number>);
                     
                     dc.fillPolygon(poly as Array);
                     
@@ -497,74 +558,43 @@ class BatteryMonitorView extends WatchUi.View {
             var first = true;
             
             dc.setColor(Graphics.COLOR_WHITE, Graphics.COLOR_BLACK);
-            for (var i = 0; i < cpSize; i++) {
-                var pt = curvePoints[i];
-                var x = pt[0];
-                var y = pt[1];
-                var isCharging = pt[2];
+            if (_curvePoints != null) {
+                for (var i = 0; i < cpSize; i++) {
+                    var pt = _curvePoints[i];
+                    var x = pt[0];
+                    var y = pt[1];
+                    var isCharging = pt[2];
 
-                if (!first) {
-                    // Highlight charging intervals with double lines
-                    if (isCharging == 1) {
-                        dc.drawLine(prevX, prevY, x, y);
-                        dc.drawLine(prevX, prevY + 1, x, y + 1);
+                    if (!first) {
+                        // Highlight charging intervals with double lines
+                        if (isCharging == 1) {
+                            dc.drawLine(prevX, prevY, x, y);
+                            dc.drawLine(prevX, prevY + 1, x, y + 1);
+                        } else {
+                            dc.drawLine(prevX, prevY, x, y);
+                        }
                     } else {
-                        dc.drawLine(prevX, prevY, x, y);
+                        first = false;
                     }
-                } else {
-                    first = false;
+                    prevX = x;
+                    prevY = y;
                 }
-                prevX = x;
-                prevY = y;
             }
 
             // 3. Redraw white bounding box lines to ensure they are crisp on top of the gray fill
             dc.setColor(Graphics.COLOR_WHITE, Graphics.COLOR_BLACK);
-            dc.drawLine(gx, gy + gh, gx + gw, gy + gh); // X axis
-            dc.drawLine(gx, gy, gx, gy + gh);           // Y axis
-            
-            // Draw X-axis ticks and labels
-            var xLabelLeft = "";
-            var xLabelMid = "";
-            var xLabelRight = "";
-            
-            if (_graphDuration == 0) {
-                // 24h: show hour of the day (e.g. 14h)
-                var infoLeft = Gregorian.info(new Time.Moment(windowStart), Time.FORMAT_SHORT);
-                var infoMid = Gregorian.info(new Time.Moment(windowStart + 43200), Time.FORMAT_SHORT);
-                var infoRight = Gregorian.info(new Time.Moment(now), Time.FORMAT_SHORT);
-                
-                xLabelLeft = infoLeft.hour.format("%02d") + "h";
-                xLabelMid = infoMid.hour.format("%02d") + "h";
-                xLabelRight = infoRight.hour.format("%02d") + "h";
-            } else if (_graphDuration == 1) {
-                // 7d: show day names (Mon, Wed, Fri)
-                var days = ["", "Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
-                var infoLeft = Gregorian.info(new Time.Moment(windowStart), Time.FORMAT_SHORT);
-                var infoMid = Gregorian.info(new Time.Moment(windowStart + 302400), Time.FORMAT_SHORT); // 3.5 days = 302400 seconds
-                var infoRight = Gregorian.info(new Time.Moment(now), Time.FORMAT_SHORT);
-                
-                xLabelLeft = days[infoLeft.day_of_week];
-                xLabelMid = days[infoMid.day_of_week];
-                xLabelRight = days[infoRight.day_of_week];
-            } else {
-                // 20d: show relative day marks D1, D10, D20
-                xLabelLeft = "D1";
-                xLabelMid = "D10";
-                xLabelRight = "D20";
-            }
-            
-            dc.setColor(Graphics.COLOR_WHITE, Graphics.COLOR_BLACK);
+            dc.drawLine(_gx, _gy + _gh, _gx + _gw, _gy + _gh); // X axis
+            dc.drawLine(_gx, _gy, _gx, _gy + _gh);           // Y axis
             
             // Draw tick marks (3 pixels high)
-            dc.drawLine(gx, gy + gh, gx, gy + gh + 3);
-            dc.drawLine(gx + gw / 2, gy + gh, gx + gw / 2, gy + gh + 3);
-            dc.drawLine(gx + gw, gy + gh, gx + gw, gy + gh + 3);
+            dc.drawLine(_gx, _gy + _gh, _gx, _gy + _gh + 3);
+            dc.drawLine(_gx + _gw / 2, _gy + _gh, _gx + _gw / 2, _gy + _gh + 3);
+            dc.drawLine(_gx + _gw, _gy + _gh, _gx + _gw, _gy + _gh + 3);
             
             // Draw labels centered below ticks (positioned at y = 143 to avoid axis overlapping)
-            dc.drawText(gx, gy + gh + 12, Graphics.FONT_XTINY, xLabelLeft, Graphics.TEXT_JUSTIFY_CENTER | Graphics.TEXT_JUSTIFY_VCENTER);
-            dc.drawText(gx + gw / 2, gy + gh + 12, Graphics.FONT_XTINY, xLabelMid, Graphics.TEXT_JUSTIFY_CENTER | Graphics.TEXT_JUSTIFY_VCENTER);
-            dc.drawText(gx + gw, gy + gh + 12, Graphics.FONT_XTINY, xLabelRight, Graphics.TEXT_JUSTIFY_CENTER | Graphics.TEXT_JUSTIFY_VCENTER);
+            dc.drawText(_gx, _gy + _gh + 12, Graphics.FONT_XTINY, _xLabelLeft, Graphics.TEXT_JUSTIFY_CENTER | Graphics.TEXT_JUSTIFY_VCENTER);
+            dc.drawText(_gx + _gw / 2, _gy + _gh + 12, Graphics.FONT_XTINY, _xLabelMid, Graphics.TEXT_JUSTIFY_CENTER | Graphics.TEXT_JUSTIFY_VCENTER);
+            dc.drawText(_gx + _gw, _gy + _gh + 12, Graphics.FONT_XTINY, _xLabelRight, Graphics.TEXT_JUSTIFY_CENTER | Graphics.TEXT_JUSTIFY_VCENTER);
         }
     }
 
@@ -650,6 +680,7 @@ class BatteryMonitorView extends WatchUi.View {
         } else if (_page == 2) {
             // Cycle duration: 24h (0) -> 7d (1) -> 20d (2)
             _graphDuration = (_graphDuration + 1) % 3;
+            _graphDataInvalid = true;
         } else {
             // Trigger manual logging point or seeder depending on environment
             var settings = System.getDeviceSettings();

@@ -10,7 +10,7 @@ class BatteryMonitorServiceDelegate extends System.ServiceDelegate {
 
     // Called when the temporal background event triggers
     function onTemporalEvent() as Void {
-        BatteryLogger.logCurrentState();
+        BatteryLogger.logCurrentStateBackground();
         Background.exit(true);
     }
 }
