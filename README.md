@@ -69,29 +69,6 @@ The widget's layout adapts dynamically based on whether the target watch feature
 
 ---
 
-## Folder Structure
-
-```
-garmin-battery-monitor/
-├── manifest.xml                 # Target devices, UUID, type="widget", and Background permissions
-├── monkey.jungle                # Project build path configurations
-├── README.md                    # Setup and sideloading instructions (this file)
-├── resources/
-│   ├── drawables/
-│   │   ├── drawables.xml        # Declares drawable assets
-│   │   └── launcher_icon.png    # 62x62 circular battery icon (required by compiler)
-│   └── strings/
-│       └── strings.xml          # Declares localizable strings (AppName, etc.)
-└── source/
-    ├── BatteryMonitorApp.mc     # Main application lifecycle & service registration
-    ├── BatteryMonitorDelegate.mc# Handlers for button interactions (UP/DOWN/GPS/MENU/BACK)
-    ├── BatteryMonitorGlanceView.mc# Memory-safe widget glance loop display (on-the-fly estimates)
-    ├── BatteryMonitorServiceDelegate.mc# Background temporal logger (runs every 30 minutes)
-    └── BatteryMonitorView.mc    # Core UI, analytics calculations, graph & scrollbar rendering
-```
-
----
-
 ## System Requirements
 
 To build and run this application on your Mac, you need:

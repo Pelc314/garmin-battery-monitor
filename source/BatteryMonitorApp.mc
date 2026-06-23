@@ -35,7 +35,9 @@ class BatteryMonitorApp extends Application.AppBase {
 
     // Return the view to show in the Glance/Widget loop
     (:glance)
-    function getGlanceView() as [WatchUi.GlanceView] or [WatchUi.GlanceView, WatchUi.GlanceViewDelegate] or Null {
+    function getGlanceView() as [WatchUi.GlanceView] 
+        or [WatchUi.GlanceView, WatchUi.GlanceViewDelegate] 
+        or Null {
         return [ new BatteryMonitorGlanceView() ] as [WatchUi.GlanceView];
     }
 
