@@ -12,7 +12,7 @@ module BatteryLogger {
         var stats = System.getSystemStats();
         
         var battery = stats.battery;
-        var isCharging = stats.charging ? 1 : 0;
+        var chargingStatus = getChargingStatus(stats);
         
         var solar = 0;
         if (stats has :solarIntensity && stats.solarIntensity != null) {
@@ -44,7 +44,8 @@ module BatteryLogger {
         while (pChargingStates.size() < maxSize) { pChargingStates.add(0); }
         while (pSolarIntensities.size() < maxSize) { pSolarIntensities.add(0); }
 
-        // Prevent duplicate logs within the 5-minute interval
+        // If less than 5 minutes passed, update the last entry to capture the latest state
+        // without increasing array size.
         var shouldAppend = true;
         if (pTimestamps.size() > 0) {
             var lastTime = pTimestamps[pTimestamps.size() - 1];
@@ -52,7 +53,7 @@ module BatteryLogger {
                 shouldAppend = false;
                 pTimestamps[pTimestamps.size() - 1] = now;
                 pBatteryLevels[pBatteryLevels.size() - 1] = (battery * 10.0).toNumber();
-                pChargingStates[pChargingStates.size() - 1] = isCharging;
+                pChargingStates[pChargingStates.size() - 1] = chargingStatus;
                 pSolarIntensities[pSolarIntensities.size() - 1] = solar;
             }
         }
@@ -60,7 +61,7 @@ module BatteryLogger {
         if (shouldAppend) {
             pTimestamps.add(now);
             pBatteryLevels.add((battery * 10.0).toNumber());
-            pChargingStates.add(isCharging);
+            pChargingStates.add(chargingStatus);
             pSolarIntensities.add(solar);
 
             // Cap the pending queue size (48 entries = 24 hours of logs)
@@ -171,6 +172,19 @@ module BatteryLogger {
         calculateAndSaveAnalytics(timestamps, batteryLevels, chargingStates, solarIntensities);
     }
 
+    // 0 = discharging (not plugged in, no solar)
+    // 1 = charging with AC/USB (plugged in, stats.charging is true)
+    // 2 = solar active (not plugged in, stats.charging is false, but stats.solarIntensity > 0)
+    function getChargingStatus(stats as $.Toybox.System.Stats) as Number {
+        if (stats.charging) {
+            return 1;
+        } 
+        if (stats has :solarIntensity && stats.solarIntensity != null && stats.solarIntensity > 0) {
+            return 2;
+        }
+        return 0;
+    }
+
     // Logs the current watch state (battery %, charging state, solar intensity) manually
     // from the Active View (main app).
     function logCurrentState() as Void {
@@ -180,8 +194,7 @@ module BatteryLogger {
         var now = Time.now().value();
         var stats = System.getSystemStats();
         var battery = stats.battery;
-        var isCharging = stats.charging ? 1 : 0;
-        
+        var chargingStatus = getChargingStatus(stats);
         var solar = 0;
         if (stats has :solarIntensity && stats.solarIntensity != null) {
             solar = stats.solarIntensity;
@@ -212,15 +225,16 @@ module BatteryLogger {
         while (chargingStates.size() < maxSize) { chargingStates.add(0); }
         while (solarIntensities.size() < maxSize) { solarIntensities.add(0); }
 
-        // Prevent duplicate logs within the 5-minute interval
-        var shouldAppend = true;
+        // If less than 5 minutes passed, update the last entry to capture the latest state
+        // without increasing array size.
+        var shouldAppend = true; 
         if (timestamps.size() > 0) {
             var lastTime = timestamps[timestamps.size() - 1];
             if (now - lastTime < 300) {
                 shouldAppend = false;
                 timestamps[timestamps.size() - 1] = now;
                 batteryLevels[batteryLevels.size() - 1] = (battery * 10.0).toNumber();
-                chargingStates[chargingStates.size() - 1] = isCharging;
+                chargingStates[chargingStates.size() - 1] = chargingStatus;
                 solarIntensities[solarIntensities.size() - 1] = solar;
             }
         }
@@ -228,7 +242,7 @@ module BatteryLogger {
         if (shouldAppend) {
             timestamps.add(now);
             batteryLevels.add((battery * 10.0).toNumber());
-            chargingStates.add(isCharging);
+            chargingStates.add(chargingStatus);
             solarIntensities.add(solar);
 
             if (timestamps.size() > 960) {
@@ -274,7 +288,10 @@ module BatteryLogger {
                 var batDiffTenths = batteryLevels[i-1] - batteryLevels[i];
                 
                 // Average drain rate during non-charging periods
-                if (chargingStates[i] == 0 && chargingStates[i-1] == 0 && dtSeconds > 0 && dtSeconds < 172800) { // 48 hours = 172800 seconds
+                if (chargingStates[i] == 0 
+                    && chargingStates[i-1] == 0 
+                    && dtSeconds > 0 
+                    && dtSeconds < 172800) { // 48 hours = 172800 seconds
                     if (batDiffTenths >= 0) {
                         totalDropTenths += batDiffTenths;
                         totalSeconds += dtSeconds;
@@ -290,10 +307,13 @@ module BatteryLogger {
                         } else {
                             // Float conversion only when calculating the charge rate of active points
                             var gainRatePerHourTenths = dtSeconds > 0 ? (gainTenths * 3600.0 / dtSeconds.toFloat()) : 0.0;
-                            if (solarIntensities[i] == 0 || gainRatePerHourTenths > 25.0) { // 2.5% per hour = 25 tenths
+                            if (solarIntensities[i] == 0 || gainRatePerHourTenths > 70.0) { // 7% per hour
                                 acGainedTodayTenths += gainTenths;
-                            } else if (solarIntensities[i] > 0) {
+                            } else if (solarIntensities[i] > 0 || chargingStates[i] == 2) {
                                 solarGainedTodayTenths += gainTenths;
+                            } else {
+                                acGainedTodayTenths = 999; //error indication
+                                solarGainedTodayTenths = 999;
                             }
                         }
                     }
@@ -365,8 +385,8 @@ module BatteryLogger {
                 if (bat > 100.0) { bat = 100.0; }
                 solar = 0;
             } else if (dayIndex % 3 == 1 && intervalInDay >= 24 && intervalInDay <= 28) {
-                isCharging = 1;
-                bat += 1.5; // Slow Solar charge
+                isCharging = 2; // Slow Solar charge (2 = solar active)
+                bat += 1.5;
                 if (bat > 100.0) { bat = 100.0; }
                 solar = 50; // Sunlight
             } else {
@@ -379,13 +399,15 @@ module BatteryLogger {
             solarIntensities.add(solar);
         }
 
+        solarIntensities.add(25);
+        timestamps.add(nowVal);
+        batteryLevels.add(500); // 50.0% battery
+        chargingStates.add(2); // 2 = solar active (intensity 25)
+
         Storage.setValue("timestamps", timestamps);
         Storage.setValue("batteryLevels", batteryLevels);
         Storage.setValue("chargingStates", chargingStates);
         Storage.setValue("solarIntensities", solarIntensities);
-        
-        // Run logCurrentState to calculate and save the estimate
-        logCurrentState();
     }
 
     // Dummy implementation for release mode to prevent compiler undefined symbol errors

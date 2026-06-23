@@ -267,6 +267,7 @@ class BatteryMonitorView extends WatchUi.View {
 
     // Page 2: Today's Charging details
     private function drawChargingPage(dc as Dc, acGainedToday as Float, solarGainedToday as Float, solarHoursToday as Float, solarIntensityAvgToday as Float) as Void {
+        var sunSumXAxisMultiplayer = 0.815;
         var width = dc.getWidth();
         var height = dc.getHeight();
         var isInstinct = hasSubscreen();
@@ -309,6 +310,13 @@ class BatteryMonitorView extends WatchUi.View {
 
             // Solar Avg Intensity
             dc.drawText(leftCenter, yAvgSun, Graphics.FONT_XTINY, "Avg Sun: " + solarIntensityAvgToday.format("%.0f") + "%", Graphics.TEXT_JUSTIFY_CENTER | Graphics.TEXT_JUSTIFY_VCENTER);
+
+            // Estimate harvested solar energy dynamically (assuming 2.0 mA max charging current at 100% solar intensity)
+            var solarEnergyToday = solarHoursToday * solarIntensityAvgToday * 0.02;
+            dc.drawText(width * sunSumXAxisMultiplayer, ySun, Graphics.FONT_XTINY, "Sun Pwr:", Graphics.TEXT_JUSTIFY_CENTER | Graphics.TEXT_JUSTIFY_VCENTER); 
+            dc.drawText(width * sunSumXAxisMultiplayer, yExp, Graphics.FONT_XTINY, "+" + solarEnergyToday.format("%.1f"), Graphics.TEXT_JUSTIFY_CENTER | Graphics.TEXT_JUSTIFY_VCENTER);
+            dc.drawText(width * sunSumXAxisMultiplayer, yAvgSun, Graphics.FONT_XTINY, "mAh", Graphics.TEXT_JUSTIFY_CENTER | Graphics.TEXT_JUSTIFY_VCENTER);
+            
         } else {
             // Hides all solar indicators and vertically centers the AC gained indicator
             var yCenteredAc = (height * 0.55).toNumber();
@@ -682,13 +690,9 @@ class BatteryMonitorView extends WatchUi.View {
             _graphDuration = (_graphDuration + 1) % 3;
             _graphDataInvalid = true;
         } else {
-            // Trigger manual logging point or seeder depending on environment
-            var settings = System.getDeviceSettings();
-            if (settings has :simulator && settings.simulator) {
-                BatteryLogger.seedDebugData();
-            } else {
-                BatteryLogger.logCurrentState();
-            }
+            // BatteryLogger.seedDebugData();
+            BatteryLogger.logCurrentState();
+            
             loadCachedAnalytics();
             if (Attention has :playTone) {
                 Attention.playTone(Attention.TONE_KEY);
