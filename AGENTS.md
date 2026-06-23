@@ -1,6 +1,6 @@
 # Garmin Battery Monitor - Agent Instructions, Constraints and memory
 
-Welcome! This document provides vital context, architecture overview, performance constraints, and coding rules for any AI agent working on the Garmin Battery Monitor app. Treat it as guidelines for the agent and it's memory.
+Welcome! This document provides vital context, architecture overview, performance constraints, and coding rules for any AI agent working on the Garmin Battery Monitor app. Treat this file as guidelines for the agent and agent's (your) memory.
 
 ---
 
