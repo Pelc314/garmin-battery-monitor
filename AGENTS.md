@@ -55,7 +55,7 @@ Garmin watch hardware has very limited CPU power, slow storage access, and lacks
 The app stores data in persistent `Storage` under four parallel arrays:
 * `"timestamps"` (Array of Numbers - UNIX epoch seconds)
 * `"batteryLevels"` (Array of Numbers - battery percentage * 10)
-* `"chargingStates"` (Array of Numbers - 0 = discharging, 1 = charging)
+* `"chargingStates"` (Array of Numbers - 0 = discharging, 1 = charging (AC/USB), 2 = solar active)
 * `"solarIntensities"` (Array of Numbers - 0 to 100 Lux scale)
 
 ### Database Mismatches & Upgrades

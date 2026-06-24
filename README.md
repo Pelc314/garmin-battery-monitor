@@ -4,7 +4,7 @@
 
 A custom Garmin Connect IQ **Widget** that logs battery level, charging states, and solar intensity, featuring responsive layouts for both dual-screen Instinct watches and standard circular face watches.
 
-This widget logs battery percentage, charger state, and solar charging intensity every 30 minutes in the background, keeping a rolling 20-day history (960 logs) in persistent storage (capped to fit within background RAM memory limits). It calculates custom discharge rates, remaining battery life estimates based on actual usage, and separate daily AC vs. Solar charging gains. It also renders a monochrome history chart of your battery level and a page scrollbar directly on the watch screen.
+This widget logs battery percentage, charger state, and solar charging intensity every 30 minutes in the background, keeping a rolling 20-day history (960 logs) in persistent storage (capped to fit within background RAM memory limits). It calculates custom discharge rates, remaining battery life estimates based on actual usage, separate daily AC vs. Solar charging gains, and a dynamic technical estimate of solar energy generated (in mAh). It also renders a monochrome history chart of your battery level and a page scrollbar directly on the watch screen.
 
 ---
 
