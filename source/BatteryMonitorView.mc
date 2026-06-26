@@ -259,8 +259,12 @@ class BatteryMonitorView extends WatchUi.View {
         var drainStr = "Drain: --";
         if (_isPassive) {
             drainStr = isInstinct ? "Press GPS" : "Tap to open";
-        } else if (avgDrainRate > 0.0) {
-            drainStr = "Drain: -" + avgDrainRate.format("%.2f") + "%/h";
+        } else if (avgDrainRate != 0.0) {
+            if (avgDrainRate < 0.0) {
+                drainStr = "Chrg: +" + (-avgDrainRate).format("%.2f") + "%/h";
+            } else {
+                drainStr = "Drain: -" + avgDrainRate.format("%.2f") + "%/h";
+            }
         }
         dc.drawText(leftCenter, yDrain, Graphics.FONT_XTINY, drainStr, Graphics.TEXT_JUSTIFY_CENTER | Graphics.TEXT_JUSTIFY_VCENTER);
     }

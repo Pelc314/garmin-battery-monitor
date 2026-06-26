@@ -56,7 +56,7 @@ class BatteryMonitorGlanceView extends WatchUi.GlanceView {
 
         // Bottom line: Battery state & estimate
         var bodyText = battery.format("%.1f") + "%";
-        if (stats.charging) {
+        if (stats.charging || (avgDrainRate != null && avgDrainRate < -0.05)) {
             bodyText += " (Charging)";
         } else if (estString.length() > 0) {
             bodyText += " (" + estString + ")";

@@ -63,6 +63,21 @@ The app stores data in persistent `Storage` under four parallel arrays:
 * **Workaround**: Use the **History-Preserving Self-Healing Padding** mechanism. On logger load, check all arrays. Find the maximum array size, and pad the shorter arrays with default values (`0`s) to match the maximum size. **Do not slice/truncate arrays**, as that deletes the user's history. 
 Remember that all database schema changes cannot affect already saved data!
 
+### 6. Sequential Array Loading & Slicing (Memory Optimization)
+* **Rule**: Slicing or loading multiple history arrays of 960 elements simultaneously in a single thread exceeds the watch's RAM limits, leading to Out of Memory (OOM) watchdog crashes.
+* **Workaround**:
+  * **One-by-One Processing**: In `mergePendingLogs()` and `logCurrentState()`, always load, process (align, merge, slice), and write back each array sequentially. Set the local variable to `null` to release it from RAM before proceeding to the next array.
+  * **Local Slicing for Analytics**: In `calculateAndSaveAnalytics()`, load and immediately slice each array to the last 48 entries (24 hours). Execute the loop calculations on these compact 48-entry local variables in RAM. **Never write these 48-entry sliced arrays back to Storage**; this ensures the full 960-entry history in persistent storage is preserved.
+
+### 7. Responsive 2-Hour Signed Drain/Charge Rate
+* **Rule**: The drain rate displayed on Page 1 is signed and dynamically responsive:
+  * A negative rate indicates charging (displays `Chrg: +x.xx%/h`).
+  * A positive rate indicates discharging (displays `Drain: -x.xx%/h`).
+* **Calculation Fallback Chain**: 
+  * Check the last 2 hours (`7200` seconds) of data first.
+  * If empty, fallback to the last 24 hours (`86400` seconds).
+  * If still empty, fallback to all available history (up to the 48-entry limit).
+
 ---
 
 ## Debugging and Simulator Rules

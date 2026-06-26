@@ -96,80 +96,143 @@ module BatteryLogger {
         if (pChargingStates == null) { pChargingStates = [] as Array<Number>; }
         if (pSolarIntensities == null) { pSolarIntensities = [] as Array<Number>; }
 
-        var timestamps = Storage.getValue("timestamps") as Array<Number>?;
-        var batteryLevels = Storage.getValue("batteryLevels") as Array<Number>?;
-        var chargingStates = Storage.getValue("chargingStates") as Array<Number>?;
-        var solarIntensities = Storage.getValue("solarIntensities") as Array<Number>?;
-
-        if (timestamps == null) { timestamps = [] as Array<Number>; }
-        if (batteryLevels == null) { batteryLevels = [] as Array<Number>; }
-        if (chargingStates == null) { chargingStates = [] as Array<Number>; }
-        if (solarIntensities == null) { solarIntensities = [] as Array<Number>; }
-
-        // Align main arrays if mismatched
-        var maxSize = timestamps.size();
-        if (batteryLevels.size() > maxSize) { maxSize = batteryLevels.size(); }
-        if (chargingStates.size() > maxSize) { maxSize = chargingStates.size(); }
-        if (solarIntensities.size() > maxSize) { maxSize = solarIntensities.size(); }
-
         var now = Time.now().value();
-        while (timestamps.size() < maxSize) { timestamps.add(now); }
-        while (batteryLevels.size() < maxSize) {
+
+        // 1. Determine the maximum size of the main arrays first to align them,
+        // loading them one-by-one to avoid high memory utilization.
+        var tSize = 0;
+        var bSize = 0;
+        var cSize = 0;
+        var sSize = 0;
+
+        var temp = Storage.getValue("timestamps") as Array<Number>?;
+        if (temp != null) { tSize = temp.size(); temp = null; }
+        
+        temp = Storage.getValue("batteryLevels") as Array<Number>?;
+        if (temp != null) { bSize = temp.size(); temp = null; }
+
+        temp = Storage.getValue("chargingStates") as Array<Number>?;
+        if (temp != null) { cSize = temp.size(); temp = null; }
+
+        temp = Storage.getValue("solarIntensities") as Array<Number>?;
+        if (temp != null) { sSize = temp.size(); temp = null; }
+
+        var maxMainSize = tSize;
+        if (bSize > maxMainSize) { maxMainSize = bSize; }
+        if (cSize > maxMainSize) { maxMainSize = cSize; }
+        if (sSize > maxMainSize) { maxMainSize = sSize; }
+
+        // 2. Load timestamps first to determine merge actions
+        var timestamps = Storage.getValue("timestamps") as Array<Number>?;
+        if (timestamps == null) { timestamps = [] as Array<Number>; }
+        while (timestamps.size() < maxMainSize) { timestamps.add(now); }
+
+        // Simulate the merge process to record actions (overwrite last or append)
+        var pSize = pTimestamps.size();
+        var actions = [] as Array<Number>;
+        var currentTSize = timestamps.size();
+        var lastTime = currentTSize > 0 ? timestamps[currentTSize - 1] : null;
+
+        for (var i = 0; i < pSize; i++) {
+            var pTime = pTimestamps[i];
+            if (currentTSize > 0 && lastTime != null && pTime - lastTime < 300) {
+                actions.add(-1); // -1 = overwrite last element
+                lastTime = pTime;
+            } else {
+                actions.add(0); // 0 = append new element
+                currentTSize++;
+                lastTime = pTime;
+            }
+        }
+
+        // Apply actions to timestamps, slice to 960 if needed, save, and free from RAM
+        for (var i = 0; i < pSize; i++) {
+            var action = actions[i];
+            if (action == -1) {
+                if (timestamps.size() > 0) {
+                    timestamps[timestamps.size() - 1] = pTimestamps[i];
+                }
+            } else {
+                timestamps.add(pTimestamps[i]);
+            }
+        }
+        if (timestamps.size() > 960) {
+            timestamps = timestamps.slice(timestamps.size() - 960, null);
+        }
+        Storage.setValue("timestamps", timestamps);
+        timestamps = null;
+
+        // 3. Process batteryLevels one-by-one
+        var batteryLevels = Storage.getValue("batteryLevels") as Array<Number>?;
+        if (batteryLevels == null) { batteryLevels = [] as Array<Number>; }
+        while (batteryLevels.size() < maxMainSize) {
             var lastBat = batteryLevels.size() > 0 ? batteryLevels[batteryLevels.size() - 1] : 1000;
             batteryLevels.add(lastBat);
         }
-        while (chargingStates.size() < maxSize) { chargingStates.add(0); }
-        while (solarIntensities.size() < maxSize) { solarIntensities.add(0); }
-
-        // Merge pending logs into main logs
-        var pSize = pTimestamps.size();
         for (var i = 0; i < pSize; i++) {
-            var pTime = pTimestamps[i];
-            var exists = false;
-            var tSize = timestamps.size();
-            
-            if (tSize > 0) {
-                var lastTime = timestamps[tSize - 1];
-                if (pTime - lastTime < 300) {
-                    timestamps[tSize - 1] = pTime;
-                    batteryLevels[tSize - 1] = pBatteryLevels[i];
-                    chargingStates[tSize - 1] = pChargingStates[i];
-                    solarIntensities[tSize - 1] = pSolarIntensities[i];
-                    exists = true;
+            var action = actions[i];
+            if (action == -1) {
+                if (batteryLevels.size() > 0) {
+                    batteryLevels[batteryLevels.size() - 1] = pBatteryLevels[i];
                 }
-            }
-
-            if (!exists) {
-                timestamps.add(pTime);
+            } else {
                 batteryLevels.add(pBatteryLevels[i]);
+            }
+        }
+        if (batteryLevels.size() > 960) {
+            batteryLevels = batteryLevels.slice(batteryLevels.size() - 960, null);
+        }
+        Storage.setValue("batteryLevels", batteryLevels);
+        batteryLevels = null;
+
+        // 4. Process chargingStates one-by-one
+        var chargingStates = Storage.getValue("chargingStates") as Array<Number>?;
+        if (chargingStates == null) { chargingStates = [] as Array<Number>; }
+        while (chargingStates.size() < maxMainSize) { chargingStates.add(0); }
+        for (var i = 0; i < pSize; i++) {
+            var action = actions[i];
+            if (action == -1) {
+                if (chargingStates.size() > 0) {
+                    chargingStates[chargingStates.size() - 1] = pChargingStates[i];
+                }
+            } else {
                 chargingStates.add(pChargingStates[i]);
+            }
+        }
+        if (chargingStates.size() > 960) {
+            chargingStates = chargingStates.slice(chargingStates.size() - 960, null);
+        }
+        Storage.setValue("chargingStates", chargingStates);
+        chargingStates = null;
+
+        // 5. Process solarIntensities one-by-one
+        var solarIntensities = Storage.getValue("solarIntensities") as Array<Number>?;
+        if (solarIntensities == null) { solarIntensities = [] as Array<Number>; }
+        while (solarIntensities.size() < maxMainSize) { solarIntensities.add(0); }
+        for (var i = 0; i < pSize; i++) {
+            var action = actions[i];
+            if (action == -1) {
+                if (solarIntensities.size() > 0) {
+                    solarIntensities[solarIntensities.size() - 1] = pSolarIntensities[i];
+                }
+            } else {
                 solarIntensities.add(pSolarIntensities[i]);
             }
         }
-
-        // Maintain rolling 20-day history cap (960 entries)
-        if (timestamps.size() > 960) {
-            var diff = timestamps.size() - 960;
-            timestamps = timestamps.slice(diff, null);
-            batteryLevels = batteryLevels.slice(diff, null);
-            chargingStates = chargingStates.slice(diff, null);
-            solarIntensities = solarIntensities.slice(diff, null);
+        if (solarIntensities.size() > 960) {
+            solarIntensities = solarIntensities.slice(solarIntensities.size() - 960, null);
         }
-
-        // Save back main logs
-        Storage.setValue("timestamps", timestamps);
-        Storage.setValue("batteryLevels", batteryLevels);
-        Storage.setValue("chargingStates", chargingStates);
         Storage.setValue("solarIntensities", solarIntensities);
+        solarIntensities = null;
 
-        // Delete pending keys
+        // 6. Delete pending keys
         Storage.deleteValue("p_timestamps");
         Storage.deleteValue("p_batteryLevels");
         Storage.deleteValue("p_chargingStates");
         Storage.deleteValue("p_solarIntensities");
 
-        // Recalculate statistics and save estimates/averages
-        calculateAndSaveAnalytics(timestamps, batteryLevels, chargingStates, solarIntensities);
+        // 7. Recalculate statistics (loads arrays directly with small footprint)
+        calculateAndSaveAnalytics();
     }
 
     // 0 = discharging (not plugged in, no solar)
@@ -200,70 +263,112 @@ module BatteryLogger {
             solar = stats.solarIntensity;
         }
 
-        // 2. Load historical logs from Storage
+        // 2. Load max size first to align arrays if mismatched, loading one-by-one to save memory
+        var tSize = 0;
+        var bSize = 0;
+        var cSize = 0;
+        var sSize = 0;
+
+        var temp = Storage.getValue("timestamps") as Array<Number>?;
+        if (temp != null) { tSize = temp.size(); temp = null; }
+        
+        temp = Storage.getValue("batteryLevels") as Array<Number>?;
+        if (temp != null) { bSize = temp.size(); temp = null; }
+
+        temp = Storage.getValue("chargingStates") as Array<Number>?;
+        if (temp != null) { cSize = temp.size(); temp = null; }
+
+        temp = Storage.getValue("solarIntensities") as Array<Number>?;
+        if (temp != null) { sSize = temp.size(); temp = null; }
+
+        var maxSize = tSize;
+        if (bSize > maxSize) { maxSize = bSize; }
+        if (cSize > maxSize) { maxSize = cSize; }
+        if (sSize > maxSize) { maxSize = sSize; }
+
+        // 3. Process timestamps first to determine shouldAppend
         var timestamps = Storage.getValue("timestamps") as Array<Number>?;
-        var batteryLevels = Storage.getValue("batteryLevels") as Array<Number>?;
-        var chargingStates = Storage.getValue("chargingStates") as Array<Number>?;
-        var solarIntensities = Storage.getValue("solarIntensities") as Array<Number>?;
-
         if (timestamps == null) { timestamps = [] as Array<Number>; }
-        if (batteryLevels == null) { batteryLevels = [] as Array<Number>; }
-        if (chargingStates == null) { chargingStates = [] as Array<Number>; }
-        if (solarIntensities == null) { solarIntensities = [] as Array<Number>; }
-
-        // Align arrays
-        var maxSize = timestamps.size();
-        if (batteryLevels.size() > maxSize) { maxSize = batteryLevels.size(); }
-        if (chargingStates.size() > maxSize) { maxSize = chargingStates.size(); }
-        if (solarIntensities.size() > maxSize) { maxSize = solarIntensities.size(); }
-
         while (timestamps.size() < maxSize) { timestamps.add(now); }
-        while (batteryLevels.size() < maxSize) {
-            var lastBat = batteryLevels.size() > 0 ? batteryLevels[batteryLevels.size() - 1] : (battery * 10.0).toNumber();
-            batteryLevels.add(lastBat);
-        }
-        while (chargingStates.size() < maxSize) { chargingStates.add(0); }
-        while (solarIntensities.size() < maxSize) { solarIntensities.add(0); }
 
-        // If less than 5 minutes passed, update the last entry to capture the latest state
-        // without increasing array size.
         var shouldAppend = true; 
         if (timestamps.size() > 0) {
             var lastTime = timestamps[timestamps.size() - 1];
             if (now - lastTime < 300) {
                 shouldAppend = false;
                 timestamps[timestamps.size() - 1] = now;
+            }
+        }
+        if (shouldAppend) {
+            timestamps.add(now);
+            if (timestamps.size() > 960) {
+                timestamps = timestamps.slice(timestamps.size() - 960, null);
+            }
+        }
+        Storage.setValue("timestamps", timestamps);
+        timestamps = null;
+
+        // 4. Process batteryLevels one-by-one
+        var batteryLevels = Storage.getValue("batteryLevels") as Array<Number>?;
+        if (batteryLevels == null) { batteryLevels = [] as Array<Number>; }
+        while (batteryLevels.size() < maxSize) {
+            var lastBat = batteryLevels.size() > 0 ? batteryLevels[batteryLevels.size() - 1] : (battery * 10.0).toNumber();
+            batteryLevels.add(lastBat);
+        }
+        if (shouldAppend) {
+            batteryLevels.add((battery * 10.0).toNumber());
+            if (batteryLevels.size() > 960) {
+                batteryLevels = batteryLevels.slice(batteryLevels.size() - 960, null);
+            }
+        } else {
+            if (batteryLevels.size() > 0) {
                 batteryLevels[batteryLevels.size() - 1] = (battery * 10.0).toNumber();
+            }
+        }
+        Storage.setValue("batteryLevels", batteryLevels);
+        batteryLevels = null;
+
+        // 5. Process chargingStates one-by-one
+        var chargingStates = Storage.getValue("chargingStates") as Array<Number>?;
+        if (chargingStates == null) { chargingStates = [] as Array<Number>; }
+        while (chargingStates.size() < maxSize) { chargingStates.add(0); }
+        if (shouldAppend) {
+            chargingStates.add(chargingStatus);
+            if (chargingStates.size() > 960) {
+                chargingStates = chargingStates.slice(chargingStates.size() - 960, null);
+            }
+        } else {
+            if (chargingStates.size() > 0) {
                 chargingStates[chargingStates.size() - 1] = chargingStatus;
+            }
+        }
+        Storage.setValue("chargingStates", chargingStates);
+        chargingStates = null;
+
+        // 6. Process solarIntensities one-by-one
+        var solarIntensities = Storage.getValue("solarIntensities") as Array<Number>?;
+        if (solarIntensities == null) { solarIntensities = [] as Array<Number>; }
+        while (solarIntensities.size() < maxSize) { solarIntensities.add(0); }
+        if (shouldAppend) {
+            solarIntensities.add(solar);
+            if (solarIntensities.size() > 960) {
+                solarIntensities = solarIntensities.slice(solarIntensities.size() - 960, null);
+            }
+        } else {
+            if (solarIntensities.size() > 0) {
                 solarIntensities[solarIntensities.size() - 1] = solar;
             }
         }
-
-        if (shouldAppend) {
-            timestamps.add(now);
-            batteryLevels.add((battery * 10.0).toNumber());
-            chargingStates.add(chargingStatus);
-            solarIntensities.add(solar);
-
-            if (timestamps.size() > 960) {
-                timestamps = timestamps.slice(1, null);
-                batteryLevels = batteryLevels.slice(1, null);
-                chargingStates = chargingStates.slice(1, null);
-                solarIntensities = solarIntensities.slice(1, null);
-            }
-        }
-
-        Storage.setValue("timestamps", timestamps);
-        Storage.setValue("batteryLevels", batteryLevels);
-        Storage.setValue("chargingStates", chargingStates);
         Storage.setValue("solarIntensities", solarIntensities);
+        solarIntensities = null;
 
-        // Recalculate statistics
-        calculateAndSaveAnalytics(timestamps, batteryLevels, chargingStates, solarIntensities);
+        // 7. Recalculate statistics
+        calculateAndSaveAnalytics();
     }
 
-    // Recalculates analytics based on arrays and updates Storage
-    function calculateAndSaveAnalytics(timestamps as Array<Number>, batteryLevels as Array<Number>, chargingStates as Array<Number>, solarIntensities as Array<Number>) as Void {
+    // Recalculates analytics based on arrays loaded from Storage,
+    // slicing them to a maximum of 48 entries (last 24 hours) to minimize memory usage.
+    function calculateAndSaveAnalytics() as Void {
         var avgDrainRate = 0.0;
         var acGainedToday = 0.0;
         var solarGainedToday = 0.0;
@@ -271,10 +376,66 @@ module BatteryLogger {
         var solarHoursToday = 0.0;
         var estDays = null;
 
+        var tSize = 0;
+        var bSize = 0;
+        var cSize = 0;
+        var sSize = 0;
+
+        var temp = Storage.getValue("timestamps") as Array<Number>?;
+        if (temp != null) { tSize = temp.size(); temp = null; }
+        
+        temp = Storage.getValue("batteryLevels") as Array<Number>?;
+        if (temp != null) { bSize = temp.size(); temp = null; }
+
+        temp = Storage.getValue("chargingStates") as Array<Number>?;
+        if (temp != null) { cSize = temp.size(); temp = null; }
+
+        temp = Storage.getValue("solarIntensities") as Array<Number>?;
+        if (temp != null) { sSize = temp.size(); temp = null; }
+
+        var maxSize = tSize;
+        if (bSize > maxSize) { maxSize = bSize; }
+        if (cSize > maxSize) { maxSize = cSize; }
+        if (sSize > maxSize) { maxSize = sSize; }
+
+        var timestamps = Storage.getValue("timestamps") as Array<Number>?;
+        if (timestamps == null) { timestamps = [] as Array<Number>; }
+        while (timestamps.size() < maxSize) { timestamps.add(Time.now().value()); }
+
+        var batteryLevels = Storage.getValue("batteryLevels") as Array<Number>?;
+        if (batteryLevels == null) { batteryLevels = [] as Array<Number>; }
+        while (batteryLevels.size() < maxSize) {
+            var lastBat = batteryLevels.size() > 0 ? batteryLevels[batteryLevels.size() - 1] : 1000;
+            batteryLevels.add(lastBat);
+        }
+
+        var chargingStates = Storage.getValue("chargingStates") as Array<Number>?;
+        if (chargingStates == null) { chargingStates = [] as Array<Number>; }
+        while (chargingStates.size() < maxSize) { chargingStates.add(0); }
+
+        var solarIntensities = Storage.getValue("solarIntensities") as Array<Number>?;
+        if (solarIntensities == null) { solarIntensities = [] as Array<Number>; }
+        while (solarIntensities.size() < maxSize) { solarIntensities.add(0); }
+
+        if (maxSize > 48) {
+            timestamps = timestamps.slice(maxSize - 48, null);
+            batteryLevels = batteryLevels.slice(maxSize - 48, null);
+            chargingStates = chargingStates.slice(maxSize - 48, null);
+            solarIntensities = solarIntensities.slice(maxSize - 48, null);
+        }
+
         var size = timestamps.size();
         if (size >= 2) {
-            var totalSeconds = 0;
-            var totalDropTenths = 0;
+            // Variables to track semi-current rate over different time windows
+            var totalSeconds2h = 0;
+            var totalChangeTenths2h = 0;
+            
+            var totalSeconds24h = 0;
+            var totalChangeTenths24h = 0;
+            
+            var totalSecondsAll = 0;
+            var totalChangeTenthsAll = 0;
+
             var nowVal = Time.now().value();
             
             var acGainedTodayTenths = 0;
@@ -287,15 +448,25 @@ module BatteryLogger {
                 var dtSeconds = timestamps[i] - timestamps[i-1];
                 var batDiffTenths = batteryLevels[i-1] - batteryLevels[i];
                 
-                // Average drain rate during non-charging periods
-                if (chargingStates[i] == 0 
-                    && chargingStates[i-1] == 0 
-                    && dtSeconds > 0 
-                    && dtSeconds < 172800) { // 48 hours = 172800 seconds
-                    if (batDiffTenths >= 0) {
-                        totalDropTenths += batDiffTenths;
-                        totalSeconds += dtSeconds;
+                // Track signed battery rate of change across windows (including charging/discharging)
+                if (dtSeconds > 0 && dtSeconds < 172800) { // Capped at 48 hours to avoid massive outliers
+                    var age = nowVal - timestamps[i];
+                    
+                    // 2-hour window (preferred for semi-current rate)
+                    if (age <= 7200) {
+                        totalChangeTenths2h += batDiffTenths;
+                        totalSeconds2h += dtSeconds;
                     }
+                    
+                    // 24-hour window (first fallback)
+                    if (age <= 86400) {
+                        totalChangeTenths24h += batDiffTenths;
+                        totalSeconds24h += dtSeconds;
+                    }
+                    
+                    // All history window (final fallback)
+                    totalChangeTenthsAll += batDiffTenths;
+                    totalSecondsAll += dtSeconds;
                 }
                 
                 // Daily accumulator (last 24 hours)
@@ -326,9 +497,12 @@ module BatteryLogger {
                 }
             }
             
-            if (totalSeconds > 0) {
-                // avgDrainRate = (totalDropTenths / 10.0) / (totalSeconds / 3600.0) = (totalDropTenths * 360) / totalSeconds
-                avgDrainRate = (totalDropTenths.toFloat() * 360.0) / totalSeconds.toFloat();
+            if (totalSeconds2h > 0) {
+                avgDrainRate = (totalChangeTenths2h.toFloat() * 360.0) / totalSeconds2h.toFloat();
+            } else if (totalSeconds24h > 0) {
+                avgDrainRate = (totalChangeTenths24h.toFloat() * 360.0) / totalSeconds24h.toFloat();
+            } else if (totalSecondsAll > 0) {
+                avgDrainRate = (totalChangeTenthsAll.toFloat() * 360.0) / totalSecondsAll.toFloat();
             }
             
             var stats = System.getSystemStats();
