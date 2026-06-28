@@ -16,10 +16,7 @@ class BatteryMonitorView extends WatchUi.View {
     private var _isPassive as Boolean = false;
 
     // Cached history arrays
-    private var _timestamps as Array<Number>?;
-    private var _batteryLevels as Array<Number>?;
-    private var _chargingStates as Array<Number>?;
-    private var _solarIntensities as Array<Number>?;
+    private var _historyLogs as Array<Number>?;
     private var _size as Number = 0;
 
     // Caching variables for lazy-evaluation graph rendering
@@ -148,7 +145,7 @@ class BatteryMonitorView extends WatchUi.View {
             } else if (_page == 1) {
                 drawChargingPage(dc, _acGainedToday, _solarGainedToday, _solarHoursToday, _solarIntensityAvgToday);
             } else {
-                drawGraphPage(dc, _timestamps, _batteryLevels, _chargingStates, _size);
+                drawGraphPage(dc);
             }
             drawPageIndicator(dc);
         }
@@ -172,23 +169,16 @@ class BatteryMonitorView extends WatchUi.View {
     }
 
     private function loadGraphCache() as Void {
-        _timestamps = Storage.getValue("timestamps") as Array<Number>?;
-        _batteryLevels = Storage.getValue("batteryLevels") as Array<Number>?;
-        _chargingStates = Storage.getValue("chargingStates") as Array<Number>?;
-        
+        _historyLogs = Storage.getValue("historyLogs") as Array<Number>?;
         _size = 0;
-        if (_timestamps != null) {
-            _size = _timestamps.size();
-            if (_batteryLevels != null && _batteryLevels.size() < _size) { _size = _batteryLevels.size(); }
-            if (_chargingStates != null && _chargingStates.size() < _size) { _size = _chargingStates.size(); }
+        if (_historyLogs != null) {
+            _size = _historyLogs.size() / 4;
         }
         _graphDataInvalid = true;
     }
 
     private function clearGraphCache() as Void {
-        _timestamps = null;
-        _batteryLevels = null;
-        _chargingStates = null;
+        _historyLogs = null;
         _size = 0;
         _curvePoints = null;
         _graphDataInvalid = true;
@@ -381,9 +371,10 @@ class BatteryMonitorView extends WatchUi.View {
 
         // Count how many logged points fall within this time window
         var validStartIdx = _size;
-        if (_timestamps != null) {
+        if (_historyLogs != null) {
             for (var i = 0; i < _size; i++) {
-                if (_timestamps[i] >= windowStart) {
+                var t = _historyLogs[i * 4];
+                if (t >= windowStart) {
                     validStartIdx = i;
                     break;
                 }
@@ -392,8 +383,10 @@ class BatteryMonitorView extends WatchUi.View {
         var validPoints = _size - validStartIdx;
 
         _graphHasEnoughData = false;
-        if (validPoints >= 2 && _batteryLevels != null && _chargingStates != null && _timestamps != null) {
-            var durationSpanned = _timestamps[_size - 1] - _timestamps[validStartIdx];
+        if (validPoints >= 2 && _historyLogs != null) {
+            var lastIdx = (_size - 1) * 4;
+            var startIdx = validStartIdx * 4;
+            var durationSpanned = _historyLogs[lastIdx] - _historyLogs[startIdx];
             if (_graphDuration == 0) {
                 // 24h: just need at least 2 points to draw a line
                 _graphHasEnoughData = true;
@@ -418,13 +411,13 @@ class BatteryMonitorView extends WatchUi.View {
         _labelBot = "0";
 
         if (_graphHasEnoughData) {
-            if (_graphDuration == 0 && _batteryLevels != null) {
+            if (_graphDuration == 0 && _historyLogs != null) {
                 // 24h mode: calculate dynamic Y-axis range based on actual log min/max
                 var lowest = 100.0;
                 var highest = 0.0;
                 for (var i = 0; i < validPoints; i++) {
-                    var idx = validStartIdx + i;
-                    var val = _batteryLevels[idx] / 10.0; // Float %
+                    var idx = (validStartIdx + i) * 4;
+                    var val = _historyLogs[idx + 1] / 10.0; // Float %
                     if (val < lowest) { lowest = val; }
                     if (val > highest) { highest = val; }
                 }
@@ -450,12 +443,12 @@ class BatteryMonitorView extends WatchUi.View {
 
         // 1. Build the curve points
         _curvePoints = [] as Array< Array<Number> >;
-        if (_graphHasEnoughData && _timestamps != null && _batteryLevels != null && _chargingStates != null) {
+        if (_graphHasEnoughData && _historyLogs != null) {
             var lastAddedX = -1;
             for (var i = 0; i < validPoints; i++) {
-                var idx = validStartIdx + i;
-                var t = _timestamps[idx];
-                var valY = _batteryLevels[idx] / 10.0;
+                var idx = (validStartIdx + i) * 4;
+                var t = _historyLogs[idx];
+                var valY = _historyLogs[idx + 1] / 10.0;
                 
                 var ratio = (t - windowStart).toFloat() / windowSecs.toFloat();
                 if (ratio < 0.0) { ratio = 0.0; }
@@ -470,7 +463,7 @@ class BatteryMonitorView extends WatchUi.View {
                 var y = _gy + _gh - (valRatio * _gh).toNumber();
                 
                 if (i == 0 || i == validPoints - 1 || x != lastAddedX) {
-                    _curvePoints.add([x, y, _chargingStates[idx]] as Array<Number>);
+                    _curvePoints.add([x, y, _historyLogs[idx + 2]] as Array<Number>);
                     lastAddedX = x;
                 }
             }
@@ -511,7 +504,7 @@ class BatteryMonitorView extends WatchUi.View {
     }
 
     // Page 2: History Graph
-    private function drawGraphPage(dc as Dc, timestamps as Array<Number>?, batteryLevels as Array<Number>?, chargingStates as Array<Number>?, size as Number) as Void {
+    private function drawGraphPage(dc as Dc) as Void {
         if (_graphDataInvalid) {
             calculateGraphData(dc);
             _graphDataInvalid = false;
