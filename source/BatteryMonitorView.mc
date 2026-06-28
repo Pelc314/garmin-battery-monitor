@@ -77,7 +77,7 @@ class BatteryMonitorView extends WatchUi.View {
 
         // Calculate dynamic estimate based on current battery level and average drain rate
         var estDays = 0.0;
-        if (_avgDrainRate > 0.001) {
+        if (_avgDrainRate > 0.001) { //positive drain rate means that the battery is draining
             estDays = battery / _avgDrainRate / 24.0;
         }
 
