@@ -7,6 +7,7 @@ import Toybox.System;
 import Toybox.Time;
 import Toybox.Time.Gregorian;
 import Toybox.WatchUi;
+import Toybox.Timer;
 
 class BatteryMonitorView extends WatchUi.View {
 
@@ -45,11 +46,26 @@ class BatteryMonitorView extends WatchUi.View {
     private var _solarIntensityAvgToday as Float = 0.0;
     private var _solarHoursToday as Float = 0.0;
 
+    // Migration status
+    private var _isMigrating as Boolean = false;
+    private var _migrationStart as Number = 0;
+    private var _migrationMaxSize as Number = 0;
+    private var _migrationTimer as Timer.Timer?;
+
     function initialize(isPassive as Boolean) {
         View.initialize();
         _isPassive = isPassive;
-        BatteryLogger.mergePendingLogs();
-        loadCachedAnalytics();
+        
+        if (BatteryLogger.needsMigration()) {
+            _isMigrating = true;
+            _migrationStart = 0;
+            _migrationMaxSize = BatteryLogger.getMigrationMaxSize();
+            _migrationTimer = new Timer.Timer();
+            _migrationTimer.start(method(:onMigrationTimer), 50, true);
+        } else {
+            BatteryLogger.mergePendingLogs();
+            loadCachedAnalytics();
+        }
     }
 
     function onLayout(dc as Dc) as Void {
@@ -59,6 +75,11 @@ class BatteryMonitorView extends WatchUi.View {
 
     // Main draw loop
     function onUpdate(dc as Dc) as Void {
+        if (_isMigrating) {
+            drawMigrationPage(dc);
+            return;
+        }
+
         // Set up background
         dc.setColor(Graphics.COLOR_WHITE, Graphics.COLOR_BLACK);
         dc.clear();
@@ -705,5 +726,71 @@ class BatteryMonitorView extends WatchUi.View {
             }
         }
         return false;
+    }
+
+    function onHide() as Void {
+        if (_migrationTimer != null) {
+            _migrationTimer.stop();
+            _migrationTimer = null;
+        }
+    }
+
+    function onMigrationTimer() as Void {
+        if (!_isMigrating) {
+            if (_migrationTimer != null) {
+                _migrationTimer.stop();
+                _migrationTimer = null;
+            }
+            return;
+        }
+        
+        var nextStart = BatteryLogger.migrateOneBatch(_migrationStart, 240);
+        if (nextStart == -1) {
+            _isMigrating = false;
+            if (_migrationTimer != null) {
+                _migrationTimer.stop();
+                _migrationTimer = null;
+            }
+            
+            // finalize
+            BatteryLogger.mergePendingLogs();
+            loadCachedAnalytics();
+            _graphDataInvalid = true;
+            WatchUi.requestUpdate();
+        } else {
+            _migrationStart = nextStart;
+            WatchUi.requestUpdate();
+        }
+    }
+
+    private function drawMigrationPage(dc as Dc) as Void {
+        dc.setColor(Graphics.COLOR_WHITE, Graphics.COLOR_BLACK);
+        dc.clear();
+        
+        var width = dc.getWidth();
+        var height = dc.getHeight();
+        
+        dc.drawText(
+            width / 2,
+            height / 2 - 30,
+            Graphics.FONT_MEDIUM,
+            "Optimizing DB",
+            Graphics.TEXT_JUSTIFY_CENTER | Graphics.TEXT_JUSTIFY_VCENTER
+        );
+        
+        var percentStr = "Please wait...";
+        if (_migrationMaxSize > 0) {
+            var pct = (_migrationStart.toFloat() / _migrationMaxSize.toFloat() * 100.0).toNumber();
+            if (pct > 100) { pct = 100; }
+            percentStr = pct.format("%d") + "%";
+        }
+        
+        dc.drawText(
+            width / 2,
+            height / 2 + 10,
+            Graphics.FONT_SMALL,
+            percentStr,
+            Graphics.TEXT_JUSTIFY_CENTER | Graphics.TEXT_JUSTIFY_VCENTER
+        );
     }
 }

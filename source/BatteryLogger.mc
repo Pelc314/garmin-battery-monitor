@@ -6,101 +6,193 @@ import Toybox.Time;
 (:glance :background)
 module BatteryLogger {
 
-    // Performs a transactional database migration from parallel arrays to stride-4 flat arrays.
-    // Preserves the existing history.
-    function migrateToUnifiedLogs() as Void {
+    // Checks if the database needs migration from old parallel format to unified format
+    function needsMigration() as Boolean {
         var hasNewLogs = Storage.getValue("historyLogs") != null;
         if (hasNewLogs) {
-            return;
+            return false;
+        }
+        var temp = Storage.getValue("timestamps") as Array<Number>?;
+        if (temp != null && temp.size() > 0) {
+            return true;
+        }
+        return false;
+    }
+
+    // Gets the maximum size of the old database arrays to calculate migration progress
+    function getMigrationMaxSize() as Number {
+        var tSize = 0;
+        var temp = Storage.getValue("timestamps") as Array<Number>?;
+        if (temp != null) { tSize = temp.size(); temp = null; }
+        return tSize;
+    }
+
+    // Performs one step of the migration batch. Returns next start index, or -1 when complete.
+    function migrateOneBatch(start as Number, batchSize as Number) as Number {
+        var hasNewLogs = Storage.getValue("historyLogs") != null;
+        if (hasNewLogs) {
+            return -1;
         }
 
+        var tSize = 0;
+        var temp = Storage.getValue("timestamps") as Array<Number>?;
+        if (temp != null) { tSize = temp.size(); temp = null; }
+        if (tSize == 0) { return -1; }
+
+        var bSize = 0;
+        temp = Storage.getValue("batteryLevels") as Array<Number>?;
+        if (temp != null) { bSize = temp.size(); temp = null; }
+
+        var cSize = 0;
+        temp = Storage.getValue("chargingStates") as Array<Number>?;
+        if (temp != null) { cSize = temp.size(); temp = null; }
+
+        var sSize = 0;
+        temp = Storage.getValue("solarIntensities") as Array<Number>?;
+        if (temp != null) { sSize = temp.size(); temp = null; }
+
+        var maxSize = tSize;
+        if (bSize > maxSize) { maxSize = bSize; }
+        if (cSize > maxSize) { maxSize = cSize; }
+        if (sSize > maxSize) { maxSize = sSize; }
+
+        var end = start + batchSize;
+        if (end > maxSize) { end = maxSize; }
+
+        // Slice old arrays one-by-one to keep memory footprint minimal
         var timestamps = Storage.getValue("timestamps") as Array<Number>?;
-        if (timestamps == null || timestamps.size() == 0) {
-            return;
-        }
+        var tSlice = (timestamps != null) ? timestamps.slice(start, end) : [] as Array<Number>;
+        timestamps = null;
 
         var batteryLevels = Storage.getValue("batteryLevels") as Array<Number>?;
+        var bSlice = (batteryLevels != null) ? batteryLevels.slice(start, end) : [] as Array<Number>;
+        batteryLevels = null;
+
         var chargingStates = Storage.getValue("chargingStates") as Array<Number>?;
+        var cSlice = (chargingStates != null) ? chargingStates.slice(start, end) : [] as Array<Number>;
+        chargingStates = null;
+
         var solarIntensities = Storage.getValue("solarIntensities") as Array<Number>?;
+        var sSlice = (solarIntensities != null) ? solarIntensities.slice(start, end) : [] as Array<Number>;
+        solarIntensities = null;
 
-        if (batteryLevels == null) { batteryLevels = [] as Array<Number>; }
-        if (chargingStates == null) { chargingStates = [] as Array<Number>; }
-        if (solarIntensities == null) { solarIntensities = [] as Array<Number>; }
+        var sliceSize = tSlice.size();
+        while (bSlice.size() < sliceSize) { bSlice.add(1000); }
+        while (cSlice.size() < sliceSize) { cSlice.add(0); }
+        while (sSlice.size() < sliceSize) { sSlice.add(0); }
 
-        var maxSize = timestamps.size();
-        if (batteryLevels.size() > maxSize) { maxSize = batteryLevels.size(); }
-        if (chargingStates.size() > maxSize) { maxSize = chargingStates.size(); }
-        if (solarIntensities.size() > maxSize) { maxSize = solarIntensities.size(); }
+        // Load and append to the growing historyLogs array in Storage
+        var historyLogs = Storage.getValue("historyLogs") as Array<Number>?;
+        if (historyLogs == null) { historyLogs = [] as Array<Number>; }
 
-        var now = Time.now().value();
-        while (timestamps.size() < maxSize) { timestamps.add(now); }
-        while (batteryLevels.size() < maxSize) {
-            var lastBat = batteryLevels.size() > 0 ? batteryLevels[batteryLevels.size() - 1] : 1000;
-            batteryLevels.add(lastBat);
-        }
-        while (chargingStates.size() < maxSize) { chargingStates.add(0); }
-        while (solarIntensities.size() < maxSize) { solarIntensities.add(0); }
-
-        // Create stride-4 flat array
-        var historyLogs = [] as Array<Number>;
-        for (var i = 0; i < maxSize; i++) {
-            historyLogs.add(timestamps[i]);
-            historyLogs.add(batteryLevels[i]);
-            historyLogs.add(chargingStates[i]);
-            historyLogs.add(solarIntensities[i]);
+        for (var i = 0; i < sliceSize; i++) {
+            historyLogs.add(tSlice[i]);
+            historyLogs.add(bSlice[i]);
+            historyLogs.add(cSlice[i]);
+            historyLogs.add(sSlice[i]);
         }
 
-        // Transactional Guard: save and verify before deleting old keys
         Storage.setValue("historyLogs", historyLogs);
-        var verifiedLogs = Storage.getValue("historyLogs") as Array<Number>?;
-        if (verifiedLogs != null && verifiedLogs.size() == maxSize * 4) {
-            // Delete old keys
-            Storage.deleteValue("timestamps");
-            Storage.deleteValue("batteryLevels");
-            Storage.deleteValue("chargingStates");
-            Storage.deleteValue("solarIntensities");
+        historyLogs = null;
+        tSlice = null;
+        bSlice = null;
+        cSlice = null;
+        sSlice = null;
+
+        if (end >= maxSize) {
+            // Finalize pending logs migration
+            migratePendingLogsOnce();
+
+            // Transactional Guard: verify and safely clean up old keys
+            var verifiedLogs = Storage.getValue("historyLogs") as Array<Number>?;
+            if (verifiedLogs != null && verifiedLogs.size() == maxSize * 4) {
+                verifiedLogs = null;
+                Storage.deleteValue("timestamps");
+                Storage.deleteValue("batteryLevels");
+                Storage.deleteValue("chargingStates");
+                Storage.deleteValue("solarIntensities");
+            }
+            return -1;
         }
 
-        // Migrate pending logs if any
+        return end;
+    }
+
+    // Helper to migrate pending logs in a single fast, OOM-proof step at the end of migration
+    function migratePendingLogsOnce() as Void {
+        var pHasNewLogs = Storage.getValue("pendingLogs") != null;
+        if (pHasNewLogs) {
+            return;
+        }
+
+        var ptSize = 0;
+        var temp = Storage.getValue("p_timestamps") as Array<Number>?;
+        if (temp != null) { ptSize = temp.size(); temp = null; }
+        if (ptSize == 0) { return; }
+
+        var pbSize = 0;
+        temp = Storage.getValue("p_batteryLevels") as Array<Number>?;
+        if (temp != null) { pbSize = temp.size(); temp = null; }
+
+        var pcSize = 0;
+        temp = Storage.getValue("p_chargingStates") as Array<Number>?;
+        if (temp != null) { pcSize = temp.size(); temp = null; }
+
+        var psSize = 0;
+        temp = Storage.getValue("p_solarIntensities") as Array<Number>?;
+        if (temp != null) { psSize = temp.size(); temp = null; }
+
+        var pMaxSize = ptSize;
+        if (pbSize > pMaxSize) { pMaxSize = pbSize; }
+        if (pcSize > pMaxSize) { pMaxSize = pcSize; }
+        if (psSize > pMaxSize) { pMaxSize = psSize; }
+
         var pTimestamps = Storage.getValue("p_timestamps") as Array<Number>?;
-        if (pTimestamps != null && pTimestamps.size() > 0) {
-            var pBatteryLevels = Storage.getValue("p_batteryLevels") as Array<Number>?;
-            var pChargingStates = Storage.getValue("p_chargingStates") as Array<Number>?;
-            var pSolarIntensities = Storage.getValue("p_solarIntensities") as Array<Number>?;
+        if (pTimestamps == null) { pTimestamps = [] as Array<Number>; }
+        var now = Time.now().value();
+        while (pTimestamps.size() < pMaxSize) { pTimestamps.add(now); }
 
-            if (pBatteryLevels == null) { pBatteryLevels = [] as Array<Number>; }
-            if (pChargingStates == null) { pChargingStates = [] as Array<Number>; }
-            if (pSolarIntensities == null) { pSolarIntensities = [] as Array<Number>; }
+        var pBatteryLevels = Storage.getValue("p_batteryLevels") as Array<Number>?;
+        if (pBatteryLevels == null) { pBatteryLevels = [] as Array<Number>; }
+        while (pBatteryLevels.size() < pMaxSize) {
+            var lastBat = pBatteryLevels.size() > 0 ? pBatteryLevels[pBatteryLevels.size() - 1] : 1000;
+            pBatteryLevels.add(lastBat);
+        }
 
-            var pMaxSize = pTimestamps.size();
-            if (pBatteryLevels.size() > pMaxSize) { pMaxSize = pBatteryLevels.size(); }
-            if (pChargingStates.size() > pMaxSize) { pMaxSize = pChargingStates.size(); }
-            if (pSolarIntensities.size() > pMaxSize) { pMaxSize = pSolarIntensities.size(); }
+        var pChargingStates = Storage.getValue("p_chargingStates") as Array<Number>?;
+        if (pChargingStates == null) { pChargingStates = [] as Array<Number>; }
+        while (pChargingStates.size() < pMaxSize) {
+            pChargingStates.add(0);
+        }
 
-            while (pTimestamps.size() < pMaxSize) { pTimestamps.add(now); }
-            while (pBatteryLevels.size() < pMaxSize) {
-                var lastBat = pBatteryLevels.size() > 0 ? pBatteryLevels[pBatteryLevels.size() - 1] : 1000;
-                pBatteryLevels.add(lastBat);
-            }
-            while (pChargingStates.size() < pMaxSize) { pChargingStates.add(0); }
-            while (pSolarIntensities.size() < pMaxSize) { pSolarIntensities.add(0); }
+        var pSolarIntensities = Storage.getValue("p_solarIntensities") as Array<Number>?;
+        if (pSolarIntensities == null) { pSolarIntensities = [] as Array<Number>; }
+        while (pSolarIntensities.size() < pMaxSize) {
+            pSolarIntensities.add(0);
+        }
 
-            var pendingLogs = [] as Array<Number>;
-            for (var i = 0; i < pMaxSize; i++) {
-                pendingLogs.add(pTimestamps[i]);
-                pendingLogs.add(pBatteryLevels[i]);
-                pendingLogs.add(pChargingStates[i]);
-                pendingLogs.add(pSolarIntensities[i]);
-            }
+        var pendingLogs = [] as Array<Number>;
+        for (var i = 0; i < pMaxSize; i++) {
+            pendingLogs.add(pTimestamps[i]);
+            pendingLogs.add(pBatteryLevels[i]);
+            pendingLogs.add(pChargingStates[i]);
+            pendingLogs.add(pSolarIntensities[i]);
+        }
+        pTimestamps = null;
+        pBatteryLevels = null;
+        pChargingStates = null;
+        pSolarIntensities = null;
 
-            Storage.setValue("pendingLogs", pendingLogs);
-            var verifiedPending = Storage.getValue("pendingLogs") as Array<Number>?;
-            if (verifiedPending != null && verifiedPending.size() == pMaxSize * 4) {
-                Storage.deleteValue("p_timestamps");
-                Storage.deleteValue("p_batteryLevels");
-                Storage.deleteValue("p_chargingStates");
-                Storage.deleteValue("p_solarIntensities");
-            }
+        Storage.setValue("pendingLogs", pendingLogs);
+        pendingLogs = null;
+
+        var verifiedPending = Storage.getValue("pendingLogs") as Array<Number>?;
+        if (verifiedPending != null && verifiedPending.size() == pMaxSize * 4) {
+            verifiedPending = null;
+            Storage.deleteValue("p_timestamps");
+            Storage.deleteValue("p_batteryLevels");
+            Storage.deleteValue("p_chargingStates");
+            Storage.deleteValue("p_solarIntensities");
         }
     }
 
@@ -163,7 +255,6 @@ module BatteryLogger {
     // Merges background pending logs into main history arrays.
     // Must be called from the main application thread (which has a larger memory limit).
     function mergePendingLogs() as Void {
-        migrateToUnifiedLogs(); // Run data migration if needed
 
         var pendingLogs = Storage.getValue("pendingLogs") as Array<Number>?;
         if (pendingLogs == null || pendingLogs.size() == 0) {
@@ -355,7 +446,6 @@ module BatteryLogger {
                 var currB = historyLogs[currIdx + 1];
                 var prevC = historyLogs[prevIdx + 2];
                 var currC = historyLogs[currIdx + 2];
-                var prevS = historyLogs[prevIdx + 3];
                 var currS = historyLogs[currIdx + 3];
 
                 var dtSeconds = currT - prevT;
